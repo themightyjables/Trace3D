@@ -4,7 +4,7 @@ Turn photos of your tools into a custom [Gridfinity](https://gridfinity.xyz/) bi
 
 Photograph objects on a sheet of paper, trace their outlines, arrange them together, and download a single printable STL or 3MF with a pocket for each one. Everything runs client-side in one HTML file; nothing is uploaded anywhere.
 
-**Live tool:** https://YOUR-SITE-NAME.netlify.app
+**Live tool:** https://themightyjables.github.io/Trace3d/
 
 ---
 
