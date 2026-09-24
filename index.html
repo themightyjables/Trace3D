@@ -1,0 +1,2102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trace3D: custom Gridfinity bins from photos</title>
+<style>
+  :root{
+    --paper:#e8e2d4;
+    --ink:#20221f;
+    --ink-soft:#54574f;
+    --line:#c9c2ae;
+    --accent:#b5541e;
+    --accent-soft:#e7d3c0;
+    --panel:#f4f0e6;
+    --mono: "IBM Plex Mono", "Courier New", monospace;
+    --sans: "IBM Plex Sans", -apple-system, Segoe UI, Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;background:var(--paper);color:var(--ink);font-family:var(--sans);}
+  body{padding-bottom:80px;}
+
+  header{
+    padding:36px 24px 20px;
+    border-bottom:3px solid var(--ink);
+    max-width:1100px;margin:0 auto;
+  }
+  header h1{
+    font-family:var(--mono);
+    font-size:28px;
+    letter-spacing:-0.02em;
+    margin:0 0 6px;
+  }
+  header h1 span{color:var(--accent);}
+  header p{margin:0;color:var(--ink-soft);max-width:640px;line-height:1.5;font-size:15px;}
+
+  main{max-width:1100px;margin:0 auto;padding:24px;}
+
+  .step{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:2px;
+    margin-bottom:20px;
+    overflow:hidden;
+    transition:opacity 0.2s ease, box-shadow 0.2s ease;
+    scroll-margin-top:16px;
+  }
+  .step-head{
+    display:flex;align-items:baseline;gap:12px;
+    padding:16px 20px;
+    border-bottom:1px solid var(--line);
+    background:#efe9db;
+  }
+  .step-num{
+    font-family:var(--mono);
+    font-size:13px;
+    color:var(--accent);
+    border:1px solid var(--accent);
+    border-radius:50%;
+    width:22px;height:22px;
+    display:flex;align-items:center;justify-content:center;
+    flex-shrink:0;
+  }
+  .step-head h2{font-size:16px;margin:0;font-family:var(--mono);font-weight:600;}
+  .step-body{padding:20px;}
+  .step-hint{color:var(--ink-soft);font-size:13.5px;line-height:1.55;margin:0 0 14px;max-width:640px;}
+  .step-hint ol{margin:0;padding-left:18px;}
+  .step-hint li{margin-bottom:4px;}
+
+  /* --- wizard states --- */
+  .step.locked{opacity:0.4;}
+  .step.locked .step-body{pointer-events:none;}
+  .step.active{box-shadow:0 0 0 2px var(--accent);}
+  .step.active .step-head{background:var(--accent-soft);}
+  .step-tag{
+    margin-left:auto;font-family:var(--mono);font-size:10.5px;
+    padding:2px 9px;border-radius:10px;white-space:nowrap;
+    border:1px solid var(--line);color:var(--ink-soft);
+  }
+  .step.active .step-tag{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .step.done .step-tag{background:#3a6b4a;border-color:#3a6b4a;color:#fff;}
+  .step.locked .step-tag{color:var(--ink-soft);}
+
+  #wizardProgress{
+    font-family:var(--mono);font-size:12.5px;color:var(--accent);
+    max-width:1100px;margin:14px auto 0;padding:0 24px;
+  }
+
+  #plateBar{
+    max-width:1100px;margin:18px auto 0;padding:0 24px;
+    display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;
+  }
+  #plateBar .plate-box{
+    background:var(--panel);border:1px solid var(--line);border-radius:2px;
+    padding:14px 20px;display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;width:100%;
+  }
+  #plateBar .field-wrap{margin:0;}
+  #plateWarning{
+    font-family:var(--mono);font-size:12.5px;color:#b23a3a;
+    padding:8px 12px;border:1px solid #b23a3a;border-radius:2px;display:none;
+  }
+
+  .row{display:flex;gap:24px;flex-wrap:wrap;align-items:flex-start;}
+  .col{flex:1;min-width:280px;}
+
+  button{
+    font-family:var(--sans);
+    font-size:14px;
+    padding:9px 16px;
+    border:1px solid var(--ink);
+    background:var(--ink);
+    color:var(--paper);
+    border-radius:2px;
+    cursor:pointer;
+    margin:0 8px 8px 0;
+  }
+  button:hover{background:#3a3d38;}
+  button.secondary{
+    background:transparent;color:var(--ink);
+  }
+  button.secondary:hover{background:var(--accent-soft);}
+  button:disabled{opacity:0.35;cursor:not-allowed;}
+  button:disabled:hover{background:var(--ink);}
+  button.secondary:disabled:hover{background:transparent;}
+
+  input[type=file]{font-size:13px;}
+  input[type=number], select{
+    font-family:var(--mono);
+    font-size:14px;
+    padding:6px 8px;
+    border:1px solid var(--line);
+    background:#fff;
+    border-radius:2px;
+    width:100%;
+  }
+  label.field{display:block;font-size:12.5px;color:var(--ink-soft);margin-bottom:4px;font-family:var(--mono);}
+  .field-wrap{margin-bottom:14px;max-width:220px;}
+  .checkline{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px;}
+  .checkline input{width:16px;height:16px;}
+
+  canvas.work-canvas{
+    max-width:100%;
+    border:1px solid var(--line);
+    background:#2b2b28;
+    cursor:crosshair;
+    display:block;
+  }
+  #previewContainer{
+    width:100%;
+    height:440px;
+    border:1px solid var(--line);
+    background:#1c1e1b;
+  }
+
+  .status{
+    font-family:var(--mono);
+    font-size:12.5px;
+    color:var(--ink-soft);
+    margin-top:8px;
+    min-height:16px;
+  }
+  .status.warn{color:var(--accent);}
+
+  .toggle-row{display:flex;gap:8px;margin-bottom:16px;}
+  .toggle-row button{margin:0;}
+  .toggle-row button.active{background:var(--accent);border-color:var(--accent);}
+
+  .legend{font-size:12px;color:var(--ink-soft);font-family:var(--mono);margin-top:6px;}
+  .legend b{color:var(--accent);}
+
+  footer{
+    max-width:1100px;margin:0 auto;padding:0 24px;
+    color:var(--ink-soft);font-size:12.5px;
+  }
+
+  .step.open .step-tag{background:#fff;border-color:var(--accent);color:var(--accent);}
+  .photo-name{font-weight:400;color:var(--ink-soft);font-size:13px;margin-left:6px;}
+  input[type=text]{font-family:var(--mono);font-size:14px;padding:6px 8px;border:1px solid var(--line);background:#fff;border-radius:2px;}
+
+  .card-list{margin-top:12px;display:flex;flex-direction:column;gap:6px;}
+  .card-row{
+    display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+    background:#fff;border:1px solid var(--line);border-radius:2px;
+    padding:6px 10px;font-family:var(--mono);font-size:12.5px;
+  }
+  .card-row.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);}
+  .card-row img{width:54px;height:40px;object-fit:cover;border:1px solid var(--line);}
+  .card-row .grow{flex:1;min-width:140px;}
+  .card-row .muted{color:var(--ink-soft);}
+  .card-row button{padding:3px 10px;margin:0;font-size:12.5px;}
+  .swatch{width:14px;height:14px;border-radius:2px;flex-shrink:0;border:1px solid rgba(0,0,0,0.25);}
+
+  .canvas-tools{display:none;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;
+    font-family:var(--mono);font-size:12.5px;color:var(--ink-soft);}
+  .canvas-tools.show{display:flex;}
+  .canvas-tools button{margin:0;padding:6px 12px;}
+  .canvas-tools span{flex-basis:100%;}
+
+  .layout-toolbar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;}
+  .layout-toolbar button{margin:0;padding:6px 12px;font-size:13px;}
+  #layoutCanvas{width:100%;cursor:default;outline:none;touch-action:none;}
+  #layoutCanvas:focus{box-shadow:0 0 0 2px var(--accent-soft);}
+
+  .size-readout{
+    font-family:var(--mono);font-size:12.5px;padding:8px 12px;margin-bottom:8px;
+    border:1px solid #3a6b4a;color:#2f5a3d;background:#e6efe4;border-radius:2px;
+  }
+  .size-readout.warn{border-color:#b5541e;color:#8a3e14;background:#f5e3d3;}
+  .size-readout.bad{border-color:#b23a3a;color:#8f2525;background:#f6dcdc;}
+
+  .zoom-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:6px;font-family:var(--mono);font-size:12px;color:var(--ink-soft);}
+  .zoom-bar button{margin:0;padding:3px 10px;font-size:12px;}
+  .zoom-bar button.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .zoom-bar .muted{margin-left:4px;}
+  .canvas-wrap{max-width:100%;overflow:auto;max-height:80vh;}
+  .canvas-wrap.zoomed canvas{max-width:none;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Trace<span>3D</span></h1>
+  <p>Turn photos of your tools into one custom Gridfinity bin. Trace as many objects as you like, from one photo or several, arrange them together, and export a single printable STL. Everything runs in this browser tab; nothing is uploaded anywhere.</p>
+</header>
+
+<div id="wizardProgress">Step 1 of 5: add a photo to begin.</div>
+
+<div id="plateBar">
+  <div class="plate-box">
+    <div class="field-wrap">
+      <label class="field">Printer / build plate</label>
+      <select id="platePreset">
+        <option value="bambu256">Bambu Lab P1P / P1S / X1C / A1 (256 × 256mm)</option>
+        <option value="bambuMini">Bambu Lab A1 Mini (180 × 180mm)</option>
+        <option value="prusaMK">Prusa MK3S+ / MK4 (250 × 210mm)</option>
+        <option value="prusaMini">Prusa Mini (180 × 180mm)</option>
+        <option value="ender3">Creality Ender 3 (220 × 220mm)</option>
+        <option value="custom">Custom…</option>
+      </select>
+    </div>
+    <div class="field-wrap" style="max-width:110px;">
+      <label class="field">Plate width (mm)</label>
+      <input type="number" id="plateW" value="256" step="1" min="50" disabled>
+    </div>
+    <div class="field-wrap" style="max-width:110px;">
+      <label class="field">Plate depth (mm)</label>
+      <input type="number" id="plateH" value="256" step="1" min="50" disabled>
+    </div>
+    <p class="legend" style="margin:0;flex-basis:100%;">The bin size is checked against this plate live while you arrange objects in step 4, so you get warned as it grows.</p>
+  </div>
+  <div id="plateWarning"></div>
+</div>
+
+<main>
+
+  <!-- STEP 1: PHOTOS -->
+  <section class="step active" id="stepSection1">
+    <div class="step-head"><div class="step-num">1</div><h2>Add photos</h2><span class="step-tag" id="stepTag1">IN PROGRESS</span></div>
+    <div class="step-body">
+      <div class="step-hint">
+        <ol>
+          <li>Lay one or more objects flat on a sheet of paper (letter, legal or A4). Keep all four corners of the sheet visible and uncovered.</li>
+          <li>Photograph from above, from arm's length or farther. The app corrects for a slightly tilted camera, but distance matters for tall objects (see step 3).</li>
+          <li>Add the photo below. You can add more photos at any time; each one gets its own calibration, and every object from every photo can go into the same bin.</li>
+        </ol>
+      </div>
+      <input type="file" id="fileInput" accept="image/*" multiple>
+      <div id="photoList" class="card-list"></div>
+      <div class="status" id="uploadStatus"></div>
+    </div>
+  </section>
+
+  <!-- STEP 2: CALIBRATE -->
+  <section class="step locked" id="stepSection2">
+    <div class="step-head"><div class="step-num">2</div><h2>Calibrate scale <span class="photo-name" id="calPhotoName"></span></h2><span class="step-tag" id="stepTag2">LOCKED</span></div>
+    <div class="step-body">
+      <div class="step-hint" id="calHint"></div>
+      <div class="row">
+        <div class="col" style="max-width:230px;">
+          <div id="paperFields">
+            <div class="field-wrap">
+              <label class="field">Paper preset</label>
+              <select id="paperPreset">
+                <option value="letter">Letter (215.9 × 279.4 mm)</option>
+                <option value="legal">Legal (215.9 × 355.6 mm)</option>
+                <option value="a4">A4 (210 × 297 mm)</option>
+                <option value="custom">Custom…</option>
+              </select>
+            </div>
+            <div class="field-wrap">
+              <label class="field">Width (mm)</label>
+              <input type="number" id="paperW" value="215.9" step="0.1">
+            </div>
+            <div class="field-wrap">
+              <label class="field">Height (mm)</label>
+              <input type="number" id="paperH" value="279.4" step="0.1">
+            </div>
+          </div>
+          <button id="btnCalibrate" class="secondary" disabled>Start calibration clicks</button>
+          <div class="status" id="calStatus">Add a photo first.</div>
+        </div>
+        <div class="col">
+          <div class="zoom-bar">
+            <span>Zoom</span>
+            <button class="secondary zoom-btn active" data-z="1">Fit</button>
+            <button class="secondary zoom-btn" data-z="2">2×</button>
+            <button class="secondary zoom-btn" data-z="3">3×</button>
+            <button class="secondary zoom-btn" data-z="4">4×</button>
+            <span class="muted">zoom in to put each click right on the corner or edge</span>
+          </div>
+          <div id="canvasWrap" class="canvas-wrap"><canvas id="workCanvas" class="work-canvas"></canvas></div>
+          <div id="canvasTools" class="canvas-tools">
+            <span id="canvasToolsMsg"></span>
+            <button id="btnUndoPoint" class="secondary">Undo last point</button>
+            <button id="btnFinishTrace">Finish object</button>
+            <button id="btnCancelTrace" class="secondary">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- STEP 3: TRACE -->
+  <section class="step locked" id="stepSection3">
+    <div class="step-head"><div class="step-num">3</div><h2>Trace objects <span class="photo-name" id="tracePhotoName"></span></h2><span class="step-tag" id="stepTag3">LOCKED</span></div>
+    <div class="step-body">
+      <div class="step-hint">
+        <ol>
+          <li>Click "Trace new object", then click points around one object's outline on the photo. Click the first point again (or "Finish object") to close it.</li>
+          <li>Your trace is the exact cutout: nothing is added around it. Trace right along the object's edge, or slightly outside it if you want a looser fit.</li>
+          <li>For tall objects, trace where the object meets the paper, not its outermost visible edge. The top of a tall object is closer to the camera, so it looks bigger than it is.</li>
+          <li>Repeat for every other object in this photo. Each one gets its own pocket in the bin, with a divider between them.</li>
+          <li>Have another photo? Add it and calibrate it; its objects join the same bin. When you're done, go to step 4.</li>
+        </ol>
+      </div>
+      <button id="btnTrace" class="secondary" disabled>Trace new object</button>
+      <div id="traceObjList" class="card-list"></div>
+      <div style="margin-top:12px;">
+        <button id="btnAddAnotherPhoto" class="secondary" disabled>+ Add another photo</button>
+        <button id="btnGoArrange" disabled>Arrange the bin →</button>
+      </div>
+      <div class="status" id="traceStatus">Calibrate the photo first.</div>
+    </div>
+  </section>
+
+  <!-- STEP 4: ARRANGE + SETTINGS -->
+  <section class="step locked" id="stepSection4">
+    <div class="step-head"><div class="step-num">4</div><h2>Arrange &amp; bin settings</h2><span class="step-tag" id="stepTag4">LOCKED</span></div>
+    <div class="step-body">
+      <div class="step-hint">
+        Every traced object is shown below as its own pocket. Drag objects to move them, click one to select it, and press R (or "Rotate 90°") to turn it. "Auto-arrange" packs everything into the fewest grid cells it can. Pockets turn red when they're closer than the divider thickness. To add finger room, select an object and click "+ Thumb hole" as many times as you like. Each one is a standard 25mm circle (about an adult thumb, with room to push down and lift); drag it wherever you want it. Thumb holes move and rotate with their object, and the whole circle you see is cut.
+      </div>
+
+      <div class="row">
+        <div class="col" style="max-width:230px;">
+          <div class="field-wrap">
+            <label class="field">Divider thickness (mm)</label>
+            <input type="number" id="dividerMM" value="2" step="0.2" min="0.8">
+          </div>
+          <div class="field-wrap" style="max-width:none;">
+            <label class="field">Bin height / depth</label>
+            <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+              <input type="number" id="heightUnits" value="4" step="1" min="1" style="width:70px;">
+              <span style="font-family:var(--mono);font-size:12px;color:var(--ink-soft);">units (×7mm) =</span>
+              <input type="number" id="heightMM" value="28" step="7" min="7" style="width:80px;">
+              <span style="font-family:var(--mono);font-size:12px;color:var(--ink-soft);">mm</span>
+            </div>
+            <p class="legend" id="heightPreview" style="margin-top:6px;"></p>
+          </div>
+          <div class="field-wrap">
+            <label class="field">Outer wall thickness (mm)</label>
+            <input type="number" id="wallThickness" value="1.6" step="0.1" min="0.8">
+          </div>
+          <div class="field-wrap">
+            <label class="field">Floor thickness (mm)</label>
+            <input type="number" id="floorThickness" value="1.2" step="0.1" min="0.6">
+          </div>
+          <div class="checkline">
+            <input type="checkbox" id="lipEnabled" checked>
+            <label for="lipEnabled">Stacking lip</label>
+          </div>
+          <div class="checkline">
+            <input type="checkbox" id="thumbEnabled" checked>
+            <label for="thumbEnabled">Cut thumb holes</label>
+          </div>
+          <div class="field-wrap">
+            <label class="field">Thumb hole diameter (mm)</label>
+            <input type="number" id="thumbDiameter" value="25" step="1" min="10">
+          </div>
+        </div>
+
+        <div class="col" style="min-width:320px;">
+          <div class="layout-toolbar">
+            <button id="btnAutoArrange" class="secondary">Auto-arrange</button>
+            <button id="btnRotate" class="secondary" disabled>Rotate 90° (R)</button>
+            <button id="btnAddGrab" class="secondary" disabled>+ Thumb hole</button>
+            <button id="btnDelGrab" class="secondary" disabled>Remove thumb hole (Del)</button>
+          </div>
+          <div id="sizeReadout" class="size-readout"></div>
+          <canvas id="layoutCanvas" class="work-canvas" width="760" height="460" tabindex="0"></canvas>
+          <div id="layoutObjList" class="card-list"></div>
+          <div class="status" id="layoutStatus"></div>
+        </div>
+      </div>
+
+      <button id="btnGenerate" style="margin-top:12px;">Generate bin</button>
+      <div class="status" id="genStatus">Trace an object first.</div>
+    </div>
+  </section>
+
+  <!-- STEP 5: PREVIEW / EXPORT -->
+  <section class="step locked" id="stepSection5">
+    <div class="step-head"><div class="step-num">5</div><h2>Preview &amp; export</h2><span class="step-tag" id="stepTag5">LOCKED</span></div>
+    <div class="step-body">
+      <div class="step-hint">
+        <ol>
+          <li>Drag to rotate the preview, scroll to zoom, and check the pockets and dividers look right.</li>
+          <li>Not happy? Go back to any step, change things, and generate again.</li>
+          <li>When it looks right, download it as STL or 3MF and load it into your slicer. The 3MF opens centered on the plate you picked at the top.</li>
+        </ol>
+      </div>
+      <div id="previewContainer"></div>
+      <div class="legend">Drag to rotate, scroll to zoom.</div>
+      <div class="status warn" id="staleNote"></div>
+      <div style="margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <div class="field-wrap" style="margin:0;">
+          <label class="field">Project name</label>
+          <input type="text" id="projectName" value="trace3d" placeholder="trace3d" style="width:200px;">
+        </div>
+        <button id="btnExport" disabled style="margin-top:18px;">Download STL</button>
+        <button id="btnExport3mf" disabled style="margin-top:18px;">Download 3MF</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  Trace3D v0.5 prototype. Bins use the standard Gridfinity footprint (42n − 0.5mm), foot profile and stacking lip. Paper calibration includes perspective correction. Runs entirely client-side.
+</footer>
+
+<!-- three.js r128 (legacy, non-module builds — safest for a plain static page / file hosting) -->
+<script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/exporters/STLExporter.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/utils/BufferGeometryUtils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/polyclip-ts/dist/polyclip-ts.umd.min.js"></script>
+
+<script>
+/* =========================================================================
+   TRACE3D v0.2
+   Single-file prototype. All processing is client-side.
+
+   Data model
+   - photos[]: each uploaded photo with its own paper calibration. The
+     four clicked corners give a perspective transform (homography) from
+     photo pixels to real millimeters on the table, so a photo taken a
+     little off-angle is corrected, not just scaled.
+   - objects[]: every traced outline, from any photo. Each keeps its raw
+     pixel trace (so recalibrating a photo rescales it), a centered local
+     outline in mm, a position + 90° rotation in the shared bin layout,
+     and its own thumb holes (standard circles) in LOCAL coordinates, so
+     they move and rotate with the object.
+   - One bin is built around every object's pocket. The solid material
+     left between pockets is the divider; the layout warns when two
+     pockets are closer than the divider thickness.
+
+   Known simplifications
+   - No perspective correction: photos should be close to straight down.
+   - Polygon offset uses a per-vertex miter approximation.
+   - Stacking lip and base are stepped approximations of the spec.
+   ========================================================================= */
+
+const $ = id => document.getElementById(id);
+function dist(a,b){ return Math.hypot(a.x-b.x, a.y-b.y); }
+const canvas = $('workCanvas');
+const ctx = canvas.getContext('2d');
+
+const OBJ_COLORS = ['#7fb26a','#5fa8d3','#d98ad0','#e0c04a','#e07a5f','#6fd0b0','#b39ddb','#f4a261','#9ccc65','#4dd0e1'];
+
+const state = {
+  photos: [],          // {id, name, src, img, dispScale, calPts, H, scaleX (approx mm/px), paper, anchor}
+  activePhotoId: null,
+  objects: [],         // {id, photoId, label, color, ptsPx, localMM, photoCenter, sizeMM, pos, rot, grabs[]}
+  calibrating: false,
+  tracing: null,       // {photoId, pts:[]}
+  selectedId: null,
+  selectedGrab: null,  // {objId, idx}
+  zoom: 1,
+  nextId: 1,
+  nextLabel: 0,
+  generated: false,
+  dirty: false,
+  exported: false,
+  binGroup: null,
+  exportMesh: null,
+};
+
+function viewScale(p) { return p.dispScale * state.zoom; }
+function activePhoto() { return state.photos.find(p => p.id === state.activePhotoId) || null; }
+function photoById(id) { return state.photos.find(p => p.id === id) || null; }
+function photoObjects(p) { return state.objects.filter(o => o.photoId === p.id); }
+function objById(id) { return state.objects.find(o => o.id === id) || null; }
+function labelFor(n) { let s=''; n++; while(n>0){ const r=(n-1)%26; s=String.fromCharCode(65+r)+s; n=Math.floor((n-1)/26);} return s; }
+
+/* ============================================================
+   WIZARD
+   States are derived from the data each time anything changes:
+   locked / active (what to do next) / open (usable, not current) / done.
+   ============================================================ */
+
+const STEP_NAMES = {1:'add a photo', 2:'calibrate scale', 3:'trace objects', 4:'arrange the bin', 5:'preview & export'};
+
+function setStepState(n, st) {
+  const section = $('stepSection'+n), tag = $('stepTag'+n);
+  section.classList.remove('locked','active','done','open');
+  section.classList.add(st);
+  tag.textContent = {locked:'LOCKED', active:'IN PROGRESS', open:'READY', done:'DONE ✓'}[st];
+}
+
+function updateWizard() {
+  const p = activePhoto();
+  const n = state.objects.length;
+  const s = {};
+  s[1] = state.photos.length ? 'done' : 'active';
+  s[2] = !p ? 'locked' : (p.scaleX && !state.calibrating ? 'done' : 'active');
+  if (!p || !p.scaleX) s[3] = 'locked';
+  else s[3] = (state.tracing || photoObjects(p).length === 0) ? 'active' : 'done';
+  if (s[2] === 'active' && p && p.scaleX) s[3] = 'open';
+  if (!n) s[4] = 'locked';
+  else if (state.generated && !state.dirty) s[4] = 'done';
+  else s[4] = (s[2]==='active' || s[3]==='active') ? 'open' : 'active';
+  if (!state.generated) s[5] = 'locked';
+  else s[5] = state.dirty ? 'open' : (state.exported ? 'done' : 'active');
+  for (let i=1;i<=5;i++) setStepState(i, s[i]);
+
+  const firstActive = [1,2,3,4,5].find(i => s[i]==='active');
+  $('wizardProgress').textContent = firstActive
+    ? 'Step '+firstActive+' of 5: '+STEP_NAMES[firstActive]+'.'
+    : 'All done. STL downloaded. Change anything above and generate again any time.';
+
+  $('calPhotoName').textContent = p ? '(' + p.name + ')' : '';
+  $('tracePhotoName').textContent = p ? '(' + p.name + ')' : '';
+  if (!state.generated) $('genStatus').textContent = n ? 'Ready. Click "Generate bin" when the layout looks right.' : 'Trace at least one object first.';
+  $('staleNote').textContent = (state.generated && state.dirty) ? 'Something changed since this preview was generated. Click "Generate bin" in step 4 to update it.' : '';
+}
+
+function scrollToEl(el) { if (el) el.scrollIntoView({behavior:'smooth', block:'start'}); }
+function scrollToStep(n) { scrollToEl($('stepSection'+n)); }
+
+function markDirty() {
+  if (state.generated) state.dirty = true;
+  updateWizard();
+}
+
+/* ---------------------------- BUILD PLATE ------------------------------ */
+
+const PLATE_PRESETS = {
+  bambu256:{w:256,h:256}, bambuMini:{w:180,h:180}, prusaMK:{w:250,h:210},
+  prusaMini:{w:180,h:180}, ender3:{w:220,h:220},
+};
+$('platePreset').addEventListener('change', () => {
+  const key = $('platePreset').value;
+  const custom = key === 'custom';
+  $('plateW').disabled = !custom; $('plateH').disabled = !custom;
+  if (!custom) { $('plateW').value = PLATE_PRESETS[key].w; $('plateH').value = PLATE_PRESETS[key].h; }
+  scheduleLayoutDraw();
+});
+['plateW','plateH'].forEach(id => $(id).addEventListener('input', scheduleLayoutDraw));
+
+function plateSize() {
+  return {w: parseFloat($('plateW').value)||0, h: parseFloat($('plateH').value)||0};
+}
+
+/* ---------------------------- BIN HEIGHT -------------------------------- */
+
+function syncHeightFromUnits() {
+  const units = Math.max(1, Math.round(parseFloat($('heightUnits').value) || 1));
+  $('heightUnits').value = units; $('heightMM').value = units*7;
+  updateHeightPreview(); markDirty();
+}
+function syncHeightFromMM() {
+  const units = Math.max(1, Math.round((parseFloat($('heightMM').value) || 7)/7));
+  $('heightUnits').value = units; $('heightMM').value = units*7;
+  updateHeightPreview(); markDirty();
+}
+function updateHeightPreview() {
+  const units = Math.max(1, Math.round(parseFloat($('heightUnits').value) || 1));
+  const lipOn = $('lipEnabled').checked;
+  const total = units*7 + (lipOn ? 4.4 : 0);
+  $('heightPreview').textContent = 'Total printed height: ' + total.toFixed(1) + 'mm' + (lipOn ? ' (includes the stacking lip)' : '') + '.';
+}
+$('heightUnits').addEventListener('input', syncHeightFromUnits);
+$('heightMM').addEventListener('change', syncHeightFromMM);
+$('lipEnabled').addEventListener('change', () => { updateHeightPreview(); scheduleLayoutDraw(); markDirty(); });
+updateHeightPreview();
+
+/* ---------------------------- PHOTOS ----------------------------------- */
+
+function loadImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const img = new Image();
+      img.onload = () => resolve({img, src: ev.target.result});
+      img.onerror = reject;
+      img.src = ev.target.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+$('fileInput').addEventListener('change', async e => {
+  const files = Array.from(e.target.files || []);
+  if (!files.length) return;
+  let firstNew = null;
+  for (const file of files) {
+    try {
+      const {img, src} = await loadImageFile(file);
+      const photo = {
+        id: state.nextId++, name: file.name, src, img,
+        dispScale: Math.min(1, 820 / img.naturalWidth),
+        calPts: [], H: null, scaleX: null, paper: null, anchor: null,
+      };
+      state.photos.push(photo);
+      if (!firstNew) firstNew = photo;
+    } catch (err) {
+      $('uploadStatus').textContent = 'Could not read ' + file.name + '.';
+    }
+  }
+  e.target.value = '';
+  if (firstNew) {
+    $('uploadStatus').textContent = files.length + ' photo' + (files.length===1?'':'s') + ' added.';
+    setActivePhoto(firstNew.id);
+    scrollToStep(2);
+  }
+});
+
+function setActivePhoto(id) {
+  if (state.tracing) cancelTrace();
+  state.calibrating = false;
+  state.activePhotoId = id;
+  const p = activePhoto();
+  if (p) {
+    sizePhotoCanvas(p);
+  }
+  refreshPhotoUI();
+  redraw();
+}
+
+function sizePhotoCanvas(p) {
+  canvas.width = Math.round(p.img.naturalWidth * viewScale(p));
+  canvas.height = Math.round(p.img.naturalHeight * viewScale(p));
+  $('canvasWrap').classList.toggle('zoomed', state.zoom > 1);
+}
+
+document.querySelectorAll('.zoom-btn').forEach(btn => btn.addEventListener('click', () => {
+  const wrap = $('canvasWrap');
+  const old = state.zoom, z = parseFloat(btn.dataset.z);
+  // keep the center of the visible area centered after zooming
+  const cxFrac = (wrap.scrollLeft + wrap.clientWidth/2) / (canvas.clientWidth || 1);
+  const cyFrac = (wrap.scrollTop + wrap.clientHeight/2) / (canvas.clientHeight || 1);
+  state.zoom = z;
+  document.querySelectorAll('.zoom-btn').forEach(b => b.classList.toggle('active', b === btn));
+  const p = activePhoto();
+  if (!p) return;
+  sizePhotoCanvas(p);
+  redraw();
+  if (old !== z) {
+    wrap.scrollLeft = cxFrac * canvas.clientWidth - wrap.clientWidth/2;
+    wrap.scrollTop = cyFrac * canvas.clientHeight - wrap.clientHeight/2;
+  }
+}));
+
+function removePhoto(id) {
+  const p = photoById(id);
+  const objs = state.objects.filter(o => o.photoId === id);
+  if (objs.length && !confirm('Remove "' + p.name + '" and its ' + objs.length + ' traced object' + (objs.length===1?'':'s') + '?')) return;
+  if (state.tracing && state.tracing.photoId === id) cancelTrace();
+  state.objects = state.objects.filter(o => o.photoId !== id);
+  state.photos = state.photos.filter(x => x.id !== id);
+  if (state.activePhotoId === id) {
+    state.activePhotoId = state.photos.length ? state.photos[0].id : null;
+    if (state.activePhotoId) setActivePhoto(state.activePhotoId);
+    else ctx.clearRect(0,0,canvas.width,canvas.height);
+  }
+  if (objs.length) markDirty();
+  refreshPhotoUI();
+  scheduleLayoutDraw();
+}
+
+function refreshPhotoUI() {
+  const list = $('photoList');
+  list.innerHTML = '';
+  state.photos.forEach(p => {
+    const row = document.createElement('div');
+    row.className = 'card-row' + (p.id === state.activePhotoId ? ' active' : '');
+    const im = document.createElement('img'); im.src = p.src;
+    const info = document.createElement('div'); info.className = 'grow';
+    const nObj = photoObjects(p).length;
+    const cal = p.scaleX ? 'calibrated' : 'not calibrated';
+    info.innerHTML = '<div></div><div class="muted"></div>';
+    info.children[0].textContent = p.name;
+    info.children[1].textContent = cal + ' · ' + nObj + ' object' + (nObj===1?'':'s');
+    row.appendChild(im); row.appendChild(info);
+    if (p.id !== state.activePhotoId) {
+      const b = document.createElement('button'); b.className = 'secondary'; b.textContent = 'Work on this photo';
+      b.onclick = () => { setActivePhoto(p.id); scrollToStep(p.scaleX ? 3 : 2); };
+      row.appendChild(b);
+    } else {
+      const t = document.createElement('span'); t.className = 'muted'; t.textContent = 'active';
+      row.appendChild(t);
+    }
+    const rm = document.createElement('button'); rm.className = 'secondary'; rm.textContent = 'Remove';
+    rm.onclick = () => removePhoto(p.id);
+    row.appendChild(rm);
+    list.appendChild(row);
+  });
+
+  const p = activePhoto();
+  $('btnCalibrate').disabled = !p;
+  $('btnCalibrate').textContent = p && p.scaleX ? 'Redo calibration' : 'Start calibration clicks';
+  if (!p) $('calStatus').textContent = 'Add a photo first.';
+  else if (!state.calibrating) {
+    $('calStatus').textContent = p.scaleX
+      ? 'Calibrated to a ' + p.paper.w + ' × ' + p.paper.h + 'mm sheet (about ' + p.scaleX.toFixed(3) + ' mm per photo pixel). ' + (p.calNote || '')
+      : 'Confirm the paper size, then click "Start calibration clicks".';
+  }
+  $('btnTrace').disabled = !p || !p.scaleX || !!state.tracing;
+  $('btnAddAnotherPhoto').disabled = !state.photos.length;
+  $('btnGoArrange').disabled = !state.objects.length;
+  if (p && p.scaleX && !state.tracing) {
+    const n = photoObjects(p).length;
+    $('traceStatus').textContent = n
+      ? n + ' object' + (n===1?'':'s') + ' traced in this photo (' + state.objects.length + ' total). Trace another, add another photo, or arrange the bin.'
+      : 'Click "Trace new object" to start.';
+  } else if (!p || !p.scaleX) {
+    $('traceStatus').textContent = 'Calibrate the photo first.';
+  }
+  renderTraceObjList();
+  updateCalHint();
+  updateWizard();
+}
+
+function renderTraceObjList() {
+  const list = $('traceObjList');
+  list.innerHTML = '';
+  const p = activePhoto();
+  if (!p) return;
+  photoObjects(p).forEach(o => {
+    const row = document.createElement('div'); row.className = 'card-row';
+    const sw = document.createElement('div'); sw.className = 'swatch'; sw.style.background = o.color;
+    const info = document.createElement('div'); info.className = 'grow';
+    info.textContent = 'Object ' + o.label + ' · ' + o.sizeMM.w.toFixed(0) + ' × ' + o.sizeMM.h.toFixed(0) + 'mm';
+    const rm = document.createElement('button'); rm.className = 'secondary'; rm.textContent = 'Remove';
+    rm.onclick = () => removeObject(o.id);
+    row.appendChild(sw); row.appendChild(info); row.appendChild(rm);
+    list.appendChild(row);
+  });
+}
+
+$('btnAddAnotherPhoto').addEventListener('click', () => { scrollToStep(1); $('fileInput').click(); });
+$('btnGoArrange').addEventListener('click', () => {
+  if (state.tracing) cancelTrace();
+  updateWizard(); scheduleLayoutDraw(); scrollToStep(4);
+});
+
+/* --------------------------- CALIBRATION --------------------------------
+   Paper only. The four corners define a homography: a 3x3 transform
+   that maps any photo pixel on the table's plane to real mm on that
+   plane. Unlike a single scale factor, it undoes camera tilt, so a
+   slightly angled photo still measures true. Corners can be clicked in
+   any order; they're sorted into top-left, top-right, bottom-right,
+   bottom-left before solving. */
+
+function updateCalHint() {
+  $('calHint').innerHTML = 'Lay the object(s) on a flat sheet of paper, with all four corners of the sheet visible. Confirm the paper size, click "Start calibration clicks", then click the <b>four corners of the paper</b> in any order. Use the Zoom buttons above the photo to place each click right on the corner. Portrait or landscape both work.<br>Each photo is calibrated separately, since every photo has its own scale and angle.';
+}
+$('paperPreset').addEventListener('change', () => {
+  const v = $('paperPreset').value;
+  if (v === 'letter') { $('paperW').value = 215.9; $('paperH').value = 279.4; }
+  if (v === 'legal') { $('paperW').value = 215.9; $('paperH').value = 355.6; }
+  if (v === 'a4') { $('paperW').value = 210; $('paperH').value = 297; }
+});
+
+$('btnCalibrate').addEventListener('click', () => {
+  const p = activePhoto(); if (!p) return;
+  if (state.tracing) cancelTrace();
+  state.calibrating = true;
+  p.pendingPts = [];
+  setCalPrompt(p);
+  updateWizard();
+  redraw();
+});
+
+function setCalPrompt(p) {
+  $('calStatus').textContent = 'Click corner ' + (p.pendingPts.length + 1) + ' of 4 of the paper...';
+}
+
+// Orders four points as TL, TR, BR, BL (image coords, y down).
+function orderCorners(pts) {
+  const c = {x: pts.reduce((s,p)=>s+p.x,0)/4, y: pts.reduce((s,p)=>s+p.y,0)/4};
+  const sorted = pts.slice().sort((a,b) => Math.atan2(a.y-c.y, a.x-c.x) - Math.atan2(b.y-c.y, b.x-c.x));
+  // atan2 order with y down is clockwise on screen: start at the top-left-most
+  let start = 0, best = Infinity;
+  sorted.forEach((p,i) => { if (p.x + p.y < best) { best = p.x + p.y; start = i; } });
+  return [0,1,2,3].map(i => sorted[(start+i)%4]);
+}
+
+// Solves the 3x3 homography mapping src[i] -> dst[i] for 4 point pairs.
+function solveHomography(src, dst) {
+  const A = [], b = [];
+  for (let i=0;i<4;i++) {
+    const {x, y} = src[i], {x:u, y:v} = dst[i];
+    A.push([x, y, 1, 0, 0, 0, -u*x, -u*y]); b.push(u);
+    A.push([0, 0, 0, x, y, 1, -v*x, -v*y]); b.push(v);
+  }
+  // Gaussian elimination with partial pivoting
+  const n = 8;
+  for (let col=0; col<n; col++) {
+    let piv = col;
+    for (let r=col+1;r<n;r++) if (Math.abs(A[r][col]) > Math.abs(A[piv][col])) piv = r;
+    if (Math.abs(A[piv][col]) < 1e-12) return null;
+    [A[col], A[piv]] = [A[piv], A[col]]; [b[col], b[piv]] = [b[piv], b[col]];
+    for (let r=0;r<n;r++) {
+      if (r === col) continue;
+      const f = A[r][col] / A[col][col];
+      for (let k=col;k<n;k++) A[r][k] -= f*A[col][k];
+      b[r] -= f*b[col];
+    }
+  }
+  const h = b.map((v,i) => v / A[i][i]);
+  return [h[0],h[1],h[2], h[3],h[4],h[5], h[6],h[7],1];
+}
+function applyH(H, p) {
+  const w = H[6]*p.x + H[7]*p.y + H[8];
+  return {x: (H[0]*p.x + H[1]*p.y + H[2]) / w, y: (H[3]*p.x + H[4]*p.y + H[5]) / w};
+}
+// photo pixel -> table mm (y flipped so +y is up, like the rest of the app)
+function photoToMM(p, pt) { const q = applyH(p.H, pt); return {x: q.x, y: -q.y}; }
+
+function completeCalibration(p) {
+  const [tl, tr, br, bl] = orderCorners(p.pendingPts);
+  const W = parseFloat($('paperW').value), Hh = parseFloat($('paperH').value);
+  state.calibrating = false;
+  if (!(W > 0) || !(Hh > 0)) {
+    $('calStatus').textContent = 'Enter a valid paper size, then redo the corner clicks.';
+    redraw(); refreshPhotoUI(); return;
+  }
+  const wPx = (dist(tl,tr) + dist(bl,br)) / 2;
+  const hPx = (dist(tl,bl) + dist(tr,br)) / 2;
+  const long = Math.max(W, Hh), short = Math.min(W, Hh);
+  // longer side in the photo is the longer side of the sheet
+  const pw = wPx >= hPx ? long : short, ph = wPx >= hPx ? short : long;
+  const H = solveHomography([tl,tr,br,bl], [{x:0,y:0},{x:pw,y:0},{x:pw,y:ph},{x:0,y:ph}]);
+  const area = Math.abs(polygonSignedArea([tl,tr,br,bl]));
+  if (!H || area < 100) {
+    $('calStatus').textContent = 'Those corners don\'t form a usable rectangle. Click "Redo calibration" and click the four paper corners again.';
+    redraw(); refreshPhotoUI(); return;
+  }
+  // How far out of square the photo was: shows the user what was corrected,
+  // and flags a likely misclick if it's extreme.
+  const angleAt = (a, b, c) => { const v1={x:a.x-b.x,y:a.y-b.y}, v2={x:c.x-b.x,y:c.y-b.y}; return Math.acos((v1.x*v2.x+v1.y*v2.y)/(Math.hypot(v1.x,v1.y)*Math.hypot(v2.x,v2.y)))*180/Math.PI; };
+  const worst = Math.max(...[[bl,tl,tr],[tl,tr,br],[tr,br,bl],[br,bl,tl]].map(([a,b,c]) => Math.abs(90 - angleAt(a,b,c))));
+  let note = worst < 1 ? 'The photo was square-on.' : 'Perspective corrected: the sheet\'s corners were up to ' + worst.toFixed(0) + '° out of square in the photo.';
+  if (worst > 20) note += ' That\'s a lot; double-check each orange corner dot sits exactly on a paper corner, or retake the photo more directly overhead.';
+  p.H = H;
+  p.paper = {w: pw, h: ph};
+  p.scaleX = Math.sqrt((pw*ph) / area);   // average mm per pixel, for click spacing only
+  p.calPts = [tl, tr, br, bl];
+  p.calNote = note;
+  const affected = photoObjects(p);
+  affected.forEach(o => buildObjectMM(o));
+  if (affected.length) markDirty();
+  refreshPhotoUI();
+  redraw();
+  scheduleLayoutDraw();
+  if (!affected.length) scrollToStep(3);
+}
+
+/* ----------------------------- TRACING ---------------------------------- */
+
+$('btnTrace').addEventListener('click', () => {
+  const p = activePhoto(); if (!p || !p.scaleX) return;
+  state.calibrating = false;
+  state.tracing = {photoId: p.id, pts: []};
+  showCanvasTools();
+  refreshPhotoUI();
+  $('traceStatus').textContent = 'Tracing object ' + labelFor(state.nextLabel) + ': click around its outline on the photo above.';
+  scrollToEl(canvas);
+  redraw();
+});
+
+function showCanvasTools() {
+  const show = !!state.tracing;
+  $('canvasTools').classList.toggle('show', show);
+  if (show) {
+    const n = state.tracing.pts.length;
+    $('canvasToolsMsg').textContent = 'Tracing object ' + labelFor(state.nextLabel) + ': ' + n + ' point' + (n===1?'':'s') + '. Click the first point again or "Finish object" to close the outline.';
+    $('btnUndoPoint').disabled = n === 0;
+    $('btnFinishTrace').disabled = n < 3;
+  }
+}
+
+$('btnUndoPoint').addEventListener('click', () => {
+  if (!state.tracing) return;
+  state.tracing.pts.pop();
+  showCanvasTools(); redraw();
+});
+$('btnCancelTrace').addEventListener('click', () => { cancelTrace(); refreshPhotoUI(); });
+$('btnFinishTrace').addEventListener('click', finishTrace);
+
+function cancelTrace() {
+  state.tracing = null;
+  showCanvasTools();
+  redraw();
+}
+
+function finishTrace() {
+  const t = state.tracing;
+  if (!t || t.pts.length < 3) return;
+  const p = photoById(t.photoId);
+  const minSepPx = 1.5 / p.scaleX;
+  const pts = t.pts.slice();
+  while (pts.length > 3 && dist(pts[pts.length-1], pts[0]) < minSepPx) pts.pop();
+  const o = {
+    id: state.nextId++, photoId: p.id,
+    label: labelFor(state.nextLabel), color: OBJ_COLORS[state.nextLabel % OBJ_COLORS.length],
+    ptsPx: pts, pos: {x:0,y:0}, rot: 0, grabs: [],
+  };
+  state.nextLabel++;
+  buildObjectMM(o);
+  placeNewObject(o, p);
+  state.objects.push(o);
+  state.selectedId = o.id;
+  state.tracing = null;
+  showCanvasTools();
+  markDirty();
+  refreshPhotoUI();
+  redraw();
+  scheduleLayoutDraw();
+  $('traceStatus').textContent = 'Object ' + o.label + ' saved (' + o.sizeMM.w.toFixed(0) + ' × ' + o.sizeMM.h.toFixed(0) + 'mm). Trace another object, add another photo, or arrange the bin.';
+  scrollToStep(3);
+}
+
+// Converts an object's pixel trace to mm using its photo's calibration,
+// centered on its own bounding box so rotation happens in place.
+function buildObjectMM(o) {
+  const p = photoById(o.photoId);
+  const mm = o.ptsPx.map(q => photoToMM(p, q));
+  const bb = boundingBox(mm);
+  const c = {x:(bb.minX+bb.maxX)/2, y:(bb.minY+bb.maxY)/2};
+  o.localMM = ensureCCW(mm.map(q => ({x:q.x-c.x, y:q.y-c.y})));
+  o.photoCenter = c;
+  o.sizeMM = {w:bb.w, h:bb.h};
+}
+
+// Objects from the same photo keep their photographed arrangement.
+// The first object of a new photo lands to the right of whatever is
+// already in the layout; the rest of that photo's objects follow it.
+function placeNewObject(o, p) {
+  const others = state.objects;
+  if (!p.anchor) {
+    if (!others.length) p.anchor = {x:0, y:0};
+    else {
+      const s = getSettings();
+      let all = [];
+      others.forEach(x => { all = all.concat(objCavity(x)); });
+      const L = boundingBox(all);
+      const cb = boundingBox(o.localMM);
+      const target = {x: L.maxX + s.divider + 4 - cb.minX, y: L.maxY - cb.maxY};
+      p.anchor = {x: target.x - o.photoCenter.x, y: target.y - o.photoCenter.y};
+    }
+  }
+  o.pos = {x: o.photoCenter.x + p.anchor.x, y: o.photoCenter.y + p.anchor.y};
+}
+
+function removeObject(id) {
+  state.objects = state.objects.filter(o => o.id !== id);
+  if (state.selectedId === id) state.selectedId = null;
+  if (state.selectedGrab && state.selectedGrab.objId === id) state.selectedGrab = null;
+  markDirty();
+  refreshPhotoUI();
+  redraw();
+  scheduleLayoutDraw();
+}
+
+/* --------------------------- PHOTO CANVAS ------------------------------- */
+
+canvas.addEventListener('click', e => {
+  const p = activePhoto(); if (!p) return;
+  const r = canvas.getBoundingClientRect();
+  const cx = (e.clientX - r.left) * (canvas.width / r.width);
+  const cy = (e.clientY - r.top) * (canvas.height / r.height);
+  const vs = viewScale(p);
+  const pt = {x: cx / vs, y: cy / vs};
+
+  if (state.calibrating) {
+    p.pendingPts.push(pt);
+    if (p.pendingPts.length >= 4) completeCalibration(p);
+    else { setCalPrompt(p); redraw(); }
+    return;
+  }
+  if (state.tracing && state.tracing.photoId === p.id) {
+    const t = state.tracing;
+    // clicking back on the first point closes the outline
+    if (t.pts.length >= 3 && dist(pt, t.pts[0]) * vs < 10) { finishTrace(); return; }
+    const minSepPx = 1.5 / p.scaleX;
+    const last = t.pts[t.pts.length-1];
+    if (!last || dist(pt, last) >= minSepPx) t.pts.push(pt);
+    showCanvasTools();
+    redraw();
+  }
+});
+
+function drawPath(pts, s, close) {
+  ctx.beginPath();
+  pts.forEach((q,i) => { const x=q.x*s, y=q.y*s; if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y); });
+  if (close) ctx.closePath();
+}
+
+function redraw() {
+  const p = activePhoto();
+  if (!p) return;
+  const s = viewScale(p);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(p.img, 0, 0, canvas.width, canvas.height);
+
+  // calibration overlay (pending clicks take priority over the saved result)
+  const calPts = state.calibrating ? p.pendingPts : p.calPts;
+  ctx.strokeStyle = '#ff7a2f'; ctx.fillStyle = '#ff7a2f'; ctx.lineWidth = 2;
+  if (calPts && calPts.length === 4 && !state.calibrating) { drawPath(calPts, s, true); ctx.stroke(); }
+  (calPts || []).forEach(q => { ctx.beginPath(); ctx.arc(q.x*s, q.y*s, 4, 0, Math.PI*2); ctx.fill(); });
+
+  // finished objects on this photo
+  photoObjects(p).forEach(o => {
+    ctx.strokeStyle = o.color; ctx.lineWidth = 2;
+    ctx.fillStyle = o.color + '33';
+    drawPath(o.ptsPx, s, true); ctx.fill(); ctx.stroke();
+    const bb = boundingBox(o.ptsPx);
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 14px monospace';
+    ctx.fillText(o.label, (bb.minX+bb.maxX)/2*s - 4, (bb.minY+bb.maxY)/2*s + 5);
+  });
+
+  // object being traced
+  if (state.tracing && state.tracing.photoId === p.id && state.tracing.pts.length) {
+    const color = OBJ_COLORS[state.nextLabel % OBJ_COLORS.length];
+    const pts = state.tracing.pts;
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2;
+    drawPath(pts, s, false); ctx.stroke();
+    pts.forEach((q,i) => { ctx.beginPath(); ctx.arc(q.x*s, q.y*s, i===0 ? 6 : 3.5, 0, Math.PI*2); ctx.fill(); });
+  }
+}
+
+/* ============ GEOMETRY HELPERS ============ */
+function polygonSignedArea(pts) {
+  let a = 0;
+  for (let i=0;i<pts.length;i++){
+    const p1 = pts[i], p2 = pts[(i+1)%pts.length];
+    a += (p1.x*p2.y - p2.x*p1.y);
+  }
+  return a/2;
+}
+
+function ensureCCW(pts) {
+  return polygonSignedArea(pts) < 0 ? pts.slice().reverse() : pts.slice();
+}
+
+function normalize(v){
+  const len = Math.hypot(v.x, v.y);
+  if (len < 1e-9) return {x:0,y:0};
+  return {x:v.x/len, y:v.y/len};
+}
+
+function boundingBox(pts) {
+  let minX=Infinity,maxX=-Infinity,minY=Infinity,maxY=-Infinity;
+  pts.forEach(p=>{
+    minX=Math.min(minX,p.x); maxX=Math.max(maxX,p.x);
+    minY=Math.min(minY,p.y); maxY=Math.max(maxY,p.y);
+  });
+  return {minX,maxX,minY,maxY,w:maxX-minX,h:maxY-minY};
+}
+
+function offsetPolygon(points, dist) {
+  // Miter-offset approximation. Positive dist = outward (for a CCW polygon).
+  // Near-reversal corners (two edges pointing almost opposite directions —
+  // e.g. from a hairpin in the trace) make a pure miter join shoot out to
+  // a huge, wrong point, since its length grows toward infinity as the
+  // corner approaches 180°. Clamping it to a small multiple of the offset
+  // distance keeps that bounded instead of producing a visible spike.
+  const MITER_LIMIT = 3;
+  const pts = ensureCCW(points);
+  const n = pts.length;
+  const result = [];
+  for (let i=0;i<n;i++){
+    const prev = pts[(i-1+n)%n];
+    const curr = pts[i];
+    const next = pts[(i+1)%n];
+    const e1 = normalize({x:curr.x-prev.x, y:curr.y-prev.y});
+    const e2 = normalize({x:next.x-curr.x, y:next.y-curr.y});
+    const n1 = {x:e1.y, y:-e1.x};
+    const n2 = {x:e2.y, y:-e2.x};
+    let bis = normalize({x:n1.x+n2.x, y:n1.y+n2.y});
+    if (bis.x===0 && bis.y===0) bis = n1;
+    const cosHalf = Math.sqrt(Math.max(0,(1 + (n1.x*n2.x+n1.y*n2.y))/2)) || 1;
+    let offLen = dist / cosHalf;
+    const maxLen = Math.abs(dist) * MITER_LIMIT;
+    if (Math.abs(offLen) > maxLen) offLen = (offLen<0?-1:1) * maxLen;
+    result.push({x: curr.x + bis.x*offLen, y: curr.y + bis.y*offLen});
+  }
+  return result;
+}
+
+function edgeLength(pts, i){
+  const a = pts[i], b = pts[(i+1)%pts.length];
+  return dist(a,b);
+}
+
+// Ray-casting point-in-polygon test.
+function pointInPolygon(pt, poly) {
+  let inside = false;
+  for (let i=0, j=poly.length-1; i<poly.length; j=i++) {
+    const xi=poly[i].x, yi=poly[i].y, xj=poly[j].x, yj=poly[j].y;
+    const intersect = ((yi>pt.y) !== (yj>pt.y)) &&
+      (pt.x < (xj-xi) * (pt.y-yi) / ((yj-yi)||1e-12) + xi);
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+function segIntersect(p1,p2,p3,p4){
+  function ccw(a,b,c){ return (c.y-a.y)*(b.x-a.x) - (b.y-a.y)*(c.x-a.x); }
+  const d1=ccw(p3,p4,p1), d2=ccw(p3,p4,p2), d3=ccw(p1,p2,p3), d4=ccw(p1,p2,p4);
+  return ((d1>0&&d2<0)||(d1<0&&d2>0)) && ((d3>0&&d4<0)||(d3<0&&d4>0));
+}
+
+// Same as segIntersect but also returns *where* p1->p2 crosses p3->p4,
+// and how far along p1->p2 (t, 0..1) that crossing is. Used to pull a
+// bulge's reach back to exactly where it meets the outer wall, instead
+// of letting it overshoot past it.
+function segIntersectPoint(p1, p2, p3, p4) {
+  const d1x = p2.x-p1.x, d1y = p2.y-p1.y;
+  const d2x = p4.x-p3.x, d2y = p4.y-p3.y;
+  const denom = d1x*d2y - d1y*d2x;
+  if (Math.abs(denom) < 1e-9) return null;
+  const t = ((p3.x-p1.x)*d2y - (p3.y-p1.y)*d2x) / denom;
+  const u = ((p3.x-p1.x)*d1y - (p3.y-p1.y)*d1x) / denom;
+  if (t<0||t>1||u<0||u>1) return null;
+  return { pt: {x: p1.x+t*d1x, y: p1.y+t*d1y}, t };
+}
+
+
+/* ============================================================
+   GRIDFINITY GEOMETRY (to spec)
+
+   Every bin is built from these fixed numbers, whatever the objects
+   or layout. Objects only ever change how many whole cells the bin
+   spans; each cell's foot is identical and always centered on the
+   42mm grid, so any bin this tool makes seats in a standard baseplate.
+
+   - Grid pitch 42mm; bin footprint 42n - 0.5mm (0.25mm clearance per side)
+   - Outer corner radius 3.75mm
+   - Foot per cell, bottom to top: 0.8mm at 45°, 1.8mm vertical,
+     2.15mm at 45° (4.75mm total). Bottom 35.6mm square, radius 0.8mm;
+     top 41.5mm square, radius 3.75mm. Built as true chamfers.
+   - Stacking lip sits INSIDE the outer wall (never wider than the
+     footprint): 1.9mm at 45°, 1.8mm vertical, 0.7mm at 45° up to the
+     rim (4.4mm tall), with a small 0.4mm flat on top instead of a
+     knife edge.
+   ============================================================ */
+const GRID_SIZE = 42;
+const BIN_CLEARANCE = 0.5;
+const BIN_RADIUS = 3.75;
+const BASE_TOTAL_HEIGHT = 4.75;
+const LIP_HEIGHT = 4.4;
+// {z, inset} measured from the 41.5mm cell outline
+const FOOT_PROFILE = [ {z:0, inset:2.95}, {z:0.8, inset:2.15}, {z:2.6, inset:2.15}, {z:4.75, inset:0} ];
+// inner surface of the lip, z measured from the lip's bottom
+const LIP_PROFILE = [ {z:0, inset:2.6}, {z:1.9, inset:0.7}, {z:3.7, inset:0.7}, {z:4.0, inset:0.4}, {z:4.4, inset:0.4} ];
+const CORNER_SEGS = 8;
+const FUSE = 0.1; // parts overlap by this much so there are no coincident faces between them
+
+// Counter-clockwise rounded rectangle. Always the same vertex count for
+// a given segs, so rings of different sizes can be stitched together.
+function roundedRectRing(cx, cy, w, h, r, segs) {
+  segs = segs || CORNER_SEGS;
+  r = Math.max(0.05, Math.min(r, w/2 - 0.01, h/2 - 0.01));
+  const hw = w/2, hh = h/2, pts = [];
+  const corners = [
+    {x: cx+hw-r, y: cy+hh-r, a: 0},
+    {x: cx-hw+r, y: cy+hh-r, a: Math.PI/2},
+    {x: cx-hw+r, y: cy-hh+r, a: Math.PI},
+    {x: cx+hw-r, y: cy-hh+r, a: 1.5*Math.PI},
+  ];
+  corners.forEach(c => {
+    for (let i=0;i<=segs;i++) {
+      const a = c.a + (i/segs)*(Math.PI/2);
+      pts.push({x: c.x + r*Math.cos(a), y: c.y + r*Math.sin(a)});
+    }
+  });
+  return pts;
+}
+function insetRing(cx, cy, w, h, inset) {
+  return roundedRectRing(cx, cy, w - 2*inset, h - 2*inset, BIN_RADIUS - inset);
+}
+
+/* Small mesh builder working in bin coordinates (x, y on the plate,
+   z up), converted to the preview's y-up frame at the end the same way
+   the extrusions are (x, z, -y). */
+function MeshBuilder() { this.tris = []; }
+MeshBuilder.prototype.tri = function(a, b, c) { this.tris.push(a, b, c); };
+MeshBuilder.prototype.quad = function(a, b, c, d) { this.tri(a, b, c); this.tri(a, c, d); };
+// side wall between two rings (lower -> upper); outward=false faces inward
+MeshBuilder.prototype.side = function(lo, zlo, hi, zhi, outward) {
+  const n = lo.length;
+  for (let i=0;i<n;i++) {
+    const j = (i+1)%n;
+    const a = {x:lo[i].x, y:lo[i].y, z:zlo}, b = {x:lo[j].x, y:lo[j].y, z:zlo};
+    const c = {x:hi[j].x, y:hi[j].y, z:zhi}, d = {x:hi[i].x, y:hi[i].y, z:zhi};
+    if (outward) this.quad(a, b, c, d); else this.quad(a, d, c, b);
+  }
+};
+// flat cap of a ring at height z; up=true faces +z
+MeshBuilder.prototype.cap = function(ring, z, up) {
+  const idx = THREE.ShapeUtils.triangulateShape(ring.map(p => new THREE.Vector2(p.x, p.y)), []);
+  idx.forEach(([i, j, k]) => {
+    const a = {x:ring[i].x, y:ring[i].y, z}, b = {x:ring[j].x, y:ring[j].y, z}, c = {x:ring[k].x, y:ring[k].y, z};
+    if (up) this.tri(a, b, c); else this.tri(a, c, b);
+  });
+};
+// flat annulus between an outer and inner ring (same vertex count)
+MeshBuilder.prototype.annulus = function(outer, inner, z, up) {
+  const n = outer.length;
+  for (let i=0;i<n;i++) {
+    const j = (i+1)%n;
+    const a = {x:outer[i].x, y:outer[i].y, z}, b = {x:outer[j].x, y:outer[j].y, z};
+    const c = {x:inner[j].x, y:inner[j].y, z}, d = {x:inner[i].x, y:inner[i].y, z};
+    if (up) this.quad(a, b, c, d); else this.quad(a, d, c, b);
+  }
+};
+MeshBuilder.prototype.toGeometry = function() {
+  const pos = new Float32Array(this.tris.length*3);
+  this.tris.forEach((p, i) => { pos[i*3] = p.x; pos[i*3+1] = p.z; pos[i*3+2] = -p.y; });
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  return g;
+};
+
+// One chamfered foot per cell, 0 to 4.75mm.
+function buildGridfinityBase(cellsX, cellsY, cellCenter0) {
+  const mb = new MeshBuilder();
+  const size = GRID_SIZE - BIN_CLEARANCE;
+  for (let i=0;i<cellsX;i++) for (let j=0;j<cellsY;j++) {
+    const cx = cellCenter0.x + i*GRID_SIZE, cy = cellCenter0.y + j*GRID_SIZE;
+    const prof = FOOT_PROFILE.concat([{z: BASE_TOTAL_HEIGHT + FUSE, inset: 0}]); // pokes into the floor
+    const rings = prof.map(p => ({z:p.z, ring: insetRing(cx, cy, size, size, p.inset)}));
+    mb.cap(rings[0].ring, rings[0].z, false);
+    for (let k=0;k<rings.length-1;k++) mb.side(rings[k].ring, rings[k].z, rings[k+1].ring, rings[k+1].z, true);
+    mb.cap(rings[rings.length-1].ring, rings[rings.length-1].z, true);
+  }
+  return mb.toGeometry();
+}
+
+// Stacking lip ring on top of the bin body, entirely inside the footprint.
+function buildStackingLip(cx, cy, w, h, zBottom) {
+  const mb = new MeshBuilder();
+  const outer = roundedRectRing(cx, cy, w, h, BIN_RADIUS);
+  const prof = [{z:-FUSE, inset:LIP_PROFILE[0].inset}].concat(LIP_PROFILE); // sinks into the body
+  const inner = prof.map(p => ({z: zBottom + p.z, ring: insetRing(cx, cy, w, h, p.inset)}));
+  const zTop = zBottom + LIP_HEIGHT;
+  mb.side(outer, zBottom - FUSE, outer, zTop, true);
+  for (let k=0;k<inner.length-1;k++) mb.side(inner[k].ring, inner[k].z, inner[k+1].ring, inner[k+1].z, false);
+  mb.annulus(outer, inner[inner.length-1].ring, zTop, true);
+  mb.annulus(outer, inner[0].ring, zBottom - FUSE, false);
+  return mb.toGeometry();
+}
+
+let scene, camera, renderer, controls;
+function initThree() {
+  const container = $('previewContainer');
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x1c1e1b);
+  camera = new THREE.PerspectiveCamera(45, container.clientWidth/container.clientHeight, 0.1, 5000);
+  camera.position.set(150,150,150);
+  renderer = new THREE.WebGLRenderer({antialias:true});
+  renderer.setSize(container.clientWidth, container.clientHeight);
+  container.appendChild(renderer.domElement);
+  controls = new THREE.OrbitControls(camera, renderer.domElement);
+  const light1 = new THREE.DirectionalLight(0xffffff, 0.9);
+  light1.position.set(1,2,1);
+  scene.add(light1);
+  scene.add(new THREE.AmbientLight(0x888888));
+  const grid = new THREE.GridHelper(300, 30, 0x444444, 0x2a2a28);
+  scene.add(grid);
+  animate();
+  window.addEventListener('resize', () => {
+    camera.aspect = container.clientWidth/container.clientHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(container.clientWidth, container.clientHeight);
+  });
+}
+function animate(){ requestAnimationFrame(animate); controls.update(); renderer.render(scene,camera); }
+initThree();
+
+function vec2Array(pts){ return pts.map(p=>new THREE.Vector2(p.x,p.y)); }
+
+
+
+/* ============================================================
+   LAYOUT MATH (all mm, y up)
+   ============================================================ */
+
+const THUMB_SEGS = 40;          // polygon segments used to cut a thumb hole circle
+const MAX_THUMBS_PER_OBJECT = 20;
+
+function getSettings() {
+  return {
+    divider: Math.max(0.4, parseFloat($('dividerMM').value) || 2),
+    wallT: Math.max(0.4, parseFloat($('wallThickness').value) || 1.6),
+    floorT: Math.max(0.4, parseFloat($('floorThickness').value) || 1.2),
+    heightUnits: Math.max(1, parseInt($('heightUnits').value, 10) || 1),
+    lipOn: $('lipEnabled').checked,
+    thumbOn: $('thumbEnabled').checked,
+  };
+}
+
+function rotPt(p, k) {
+  k = ((k % 4) + 4) % 4;
+  let x = p.x, y = p.y;
+  for (let i=0;i<k;i++) { const t = x; x = -y; y = t; }
+  return {x, y};
+}
+function objWorldPts(o) {
+  return o.localMM.map(p => { const r = rotPt(p, o.rot); return {x:r.x+o.pos.x, y:r.y+o.pos.y}; });
+}
+// The traced outline IS the pocket: no clearance is added around it.
+function objCavity(o) { return objWorldPts(o); }
+/* Thumb holes are circles, all the same diameter (a setting, default
+   25mm, about an adult thumb plus room to push down and lift). Each one
+   belongs to an object and is stored as a center in that object's LOCAL
+   frame, so it moves and turns with the object. The whole circle is cut,
+   so every bit of it you see on the layout is finger room. */
+function rotVec(v, a) { const c = Math.cos(a), s = Math.sin(a); return {x: v.x*c - v.y*s, y: v.x*s + v.y*c}; }
+function thumbRadius() { return Math.max(5, parseFloat($('thumbDiameter').value) || 25) / 2; }
+function grabToWorld(o, g) {
+  const c = rotPt({x:g.cx, y:g.cy}, o.rot);
+  return {cx: c.x+o.pos.x, cy: c.y+o.pos.y, r: thumbRadius()};
+}
+function grabToLocal(o, w) {
+  const c = rotPt({x:w.cx-o.pos.x, y:w.cy-o.pos.y}, -o.rot);
+  return {cx: c.x, cy: c.y};
+}
+function circlePts(c, segs) {
+  segs = segs || THUMB_SEGS;
+  const pts = [];
+  for (let i=0;i<segs;i++) { const t = i/segs*Math.PI*2; pts.push({x: c.cx + c.r*Math.cos(t), y: c.cy + c.r*Math.sin(t)}); }
+  return pts;
+}
+function rectPts(r) {
+  return [{x:r.cx-r.w/2,y:r.cy-r.h/2},{x:r.cx+r.w/2,y:r.cy-r.h/2},{x:r.cx+r.w/2,y:r.cy+r.h/2},{x:r.cx-r.w/2,y:r.cy+r.h/2}];
+}
+// Keeps a thumb hole at least `keep` inside the outer edge. Rounded bin
+// corners are handled at generation time (clipToSafeRegion).
+function clampCircleToOuter(c, bbOuter, keep) {
+  const r = Math.min(c.r, bbOuter.w/2 - keep, bbOuter.h/2 - keep);
+  const clamp = (v, a, b) => Math.min(Math.max(v, a), b);
+  return {
+    r,
+    cx: clamp(c.cx, bbOuter.minX + keep + r, bbOuter.maxX - keep - r),
+    cy: clamp(c.cy, bbOuter.minY + keep + r, bbOuter.maxY - keep - r),
+  };
+}
+
+function cleanRing(ring) {
+  const pts = ring.map(([x,y]) => ({x,y}));
+  if (pts.length > 1) {
+    const a = pts[0], b = pts[pts.length-1];
+    if (Math.abs(a.x-b.x) < 1e-9 && Math.abs(a.y-b.y) < 1e-9) pts.pop();
+  }
+  return pts;
+}
+
+// Boolean union of any number of simple polygons via polyclip-ts.
+// Returns shapes as {outer, islands}: islands are solid areas fully
+// enclosed by a pocket (rare, but kept so nothing is silently lost).
+function unionPolys(polys) {
+  if (polys.length === 1) return {shapes:[{outer:polys[0], islands:[]}], failed:false};
+  try {
+    if (typeof polyclip === 'undefined') throw new Error('polyclip not loaded');
+    const geoms = polys.map(p => [p.map(q => [q.x, q.y])]);
+    const res = polyclip.union(...geoms);
+    if (!res || !res.length) throw new Error('empty union');
+    return {shapes: res.map(poly => ({outer: cleanRing(poly[0]), islands: poly.slice(1).map(cleanRing)})), failed:false};
+  } catch (e) {
+    console.error('union failed:', e);
+    return {shapes: polys.map(p => ({outer:p, islands:[]})), failed:true};
+  }
+}
+
+function ptSegDist(p, a, b) {
+  const dx=b.x-a.x, dy=b.y-a.y, L=dx*dx+dy*dy;
+  let t = L ? ((p.x-a.x)*dx + (p.y-a.y)*dy) / L : 0;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p.x-(a.x+t*dx), p.y-(a.y+t*dy));
+}
+// Smallest gap between two polygons, 0 if they touch or overlap.
+function polyGap(A, B, cutoff) {
+  const ba = boundingBox(A), bb = boundingBox(B);
+  const gx = Math.max(0, ba.minX-bb.maxX, bb.minX-ba.maxX);
+  const gy = Math.max(0, ba.minY-bb.maxY, bb.minY-ba.maxY);
+  if (Math.hypot(gx, gy) > cutoff) return Infinity;
+  if (pointInPolygon(A[0], B) || pointInPolygon(B[0], A)) return 0;
+  for (let i=0;i<A.length;i++) {
+    const a1=A[i], a2=A[(i+1)%A.length];
+    for (let j=0;j<B.length;j++) if (segIntersect(a1, a2, B[j], B[(j+1)%B.length])) return 0;
+  }
+  let m = Infinity;
+  for (const p of A) for (let j=0;j<B.length;j++) m = Math.min(m, ptSegDist(p, B[j], B[(j+1)%B.length]));
+  for (const p of B) for (let i=0;i<A.length;i++) m = Math.min(m, ptSegDist(p, A[i], A[(i+1)%A.length]));
+  return m;
+}
+
+function cellsFor(len, wallT) { return Math.max(1, Math.ceil((len + 2*wallT + BIN_CLEARANCE) / GRID_SIZE - 1e-9)); }
+
+// Plate fit for a footprint, trying both orientations.
+function plateFit(w, h) {
+  const pl = plateSize();
+  const fits = (w<=pl.w && h<=pl.h) || (w<=pl.h && h<=pl.w);
+  return {fits, plate: pl};
+}
+
+// Everything the picker and the generator need, computed one way so they agree.
+function computeLayout() {
+  const s = getSettings();
+  const objs = state.objects;
+  if (!objs.length) return null;
+  const cavs = objs.map(o => objCavity(o));
+  let all = []; cavs.forEach(c => { all = all.concat(c); });
+  const bb = boundingBox(all);
+  const cellsX = cellsFor(bb.w, s.wallT), cellsY = cellsFor(bb.h, s.wallT);
+  const outerW = cellsX*GRID_SIZE - BIN_CLEARANCE, outerH = cellsY*GRID_SIZE - BIN_CLEARANCE;
+  const cx = (bb.minX+bb.maxX)/2, cy = (bb.minY+bb.maxY)/2;
+  const outer = roundedRectRing(cx, cy, outerW, outerH, BIN_RADIUS);
+  const bbOuter = boundingBox(outer);
+
+  const grabsW = objs.map(o => s.thumbOn ? o.grabs.map(g => clampCircleToOuter(grabToWorld(o,g), bbOuter, s.wallT)) : []);
+  const pockets = objs.map((o,i) => {
+    const u = unionPolys([cavs[i], ...grabsW[i].map(g => circlePts(g))]);
+    return u.shapes.map(sh => sh.outer);
+  });
+
+  const conflicts = [];
+  const conflictIds = new Set();
+  for (let i=0;i<objs.length;i++) for (let j=i+1;j<objs.length;j++) {
+    let g = Infinity;
+    for (const A of pockets[i]) for (const B of pockets[j]) g = Math.min(g, polyGap(A, B, s.divider + 1));
+    if (g < s.divider - 0.05) {
+      conflicts.push({a:objs[i], b:objs[j], gap:g});
+      conflictIds.add(objs[i].id); conflictIds.add(objs[j].id);
+    }
+  }
+  const lipExtra = 0; // the lip sits inside the footprint
+  const fit = plateFit(outerW + lipExtra, outerH + lipExtra);
+  return {s, cavs, grabsW, pockets, outer, bbOuter, cellsX, cellsY, outerW, outerH, cx, cy, conflicts, conflictIds, fit, lipExtra};
+}
+
+/* ============================================================
+   SIZE READOUT + PLATE WARNING
+   ============================================================ */
+
+function updateSizeReadout(L) {
+  const el = $('sizeReadout'), warn = $('plateWarning');
+  if (!L) { el.textContent = 'No objects yet.'; el.className = 'size-readout'; warn.style.display = 'none'; return; }
+  const pl = L.fit.plate;
+  const maxA = Math.floor((pl.w + BIN_CLEARANCE - L.lipExtra) / GRID_SIZE);
+  const maxB = Math.floor((pl.h + BIN_CLEARANCE - L.lipExtra) / GRID_SIZE);
+  const big = Math.max(L.cellsX, L.cellsY), small = Math.min(L.cellsX, L.cellsY);
+  const maxBig = Math.max(maxA, maxB), maxSmall = Math.min(maxA, maxB);
+  let base = 'Bin: ' + L.cellsX + ' × ' + L.cellsY + ' grid (' + L.outerW.toFixed(1) + ' × ' + L.outerH.toFixed(1) + 'mm) · ' +
+    state.objects.length + ' object' + (state.objects.length===1?'':'s') + ' · your plate fits up to ' + maxBig + ' × ' + maxSmall + '.';
+  if (!L.fit.fits) {
+    el.className = 'size-readout bad';
+    el.textContent = '⚠ Too big for your plate. ' + base + ' Try Auto-arrange, rotate objects, or split into two bins.';
+    warn.style.display = 'block';
+    warn.textContent = '⚠ The bin is ' + L.outerW.toFixed(0) + ' × ' + L.outerH.toFixed(0) + 'mm and won\'t fit your ' + pl.w + ' × ' + pl.h + 'mm plate in either orientation.';
+  } else if (big >= maxBig || small >= maxSmall) {
+    el.className = 'size-readout warn';
+    el.textContent = 'Getting close: ' + base + ' One more row or column in that direction won\'t fit.';
+    warn.style.display = 'none';
+  } else {
+    el.className = 'size-readout';
+    el.textContent = base;
+    warn.style.display = 'none';
+  }
+}
+
+/* ============================================================
+   LAYOUT CANVAS
+   ============================================================ */
+
+const layoutCanvas = $('layoutCanvas');
+const lctx = layoutCanvas.getContext('2d');
+let layoutView = null;     // {scale, ox, oy}
+let frozenView = null;     // kept fixed while dragging so the view doesn't jump
+let drag = null;           // {type:'obj'|'grab-move', ...}
+let drawQueued = false;
+let lastLayout = null;
+
+function scheduleLayoutDraw() {
+  if (drawQueued) return;
+  drawQueued = true;
+  requestAnimationFrame(() => { drawQueued = false; drawLayout(); });
+}
+
+function sizeLayoutCanvas() {
+  const w = Math.max(320, Math.round(layoutCanvas.clientWidth || 760));
+  const h = Math.round(w * 0.6);
+  if (layoutCanvas.width !== w || layoutCanvas.height !== h) { layoutCanvas.width = w; layoutCanvas.height = h; }
+}
+window.addEventListener('resize', () => { sizeLayoutCanvas(); scheduleLayoutDraw(); });
+
+function toPx(p) { const v = frozenView || layoutView; return {x: p.x*v.scale + v.ox, y: -p.y*v.scale + v.oy}; }
+function toMMFromEvent(e) {
+  const v = frozenView || layoutView;
+  const r = layoutCanvas.getBoundingClientRect();
+  const px = (e.clientX - r.left) * (layoutCanvas.width / r.width);
+  const py = (e.clientY - r.top) * (layoutCanvas.height / r.height);
+  return {x: (px - v.ox)/v.scale, y: -(py - v.oy)/v.scale};
+}
+
+function drawLayout() {
+  sizeLayoutCanvas();
+  const W = layoutCanvas.width, H = layoutCanvas.height;
+  lctx.clearRect(0,0,W,H);
+  const L = computeLayout();
+  lastLayout = L;
+  updateSizeReadout(L);
+  renderLayoutList(L);
+  updateToolbar();
+  if (!L) { layoutView = null; $('layoutStatus').textContent = ''; return; }
+
+  const pad = 28;
+  const scale = Math.min((W-2*pad)/L.bbOuter.w, (H-2*pad)/L.bbOuter.h);
+  layoutView = {scale, ox: W/2 - L.cx*scale, oy: H/2 + L.cy*scale};
+
+  const path = (pts, close) => {
+    lctx.beginPath();
+    pts.forEach((p,i) => { const q = toPx(p); if (i===0) lctx.moveTo(q.x,q.y); else lctx.lineTo(q.x,q.y); });
+    if (close) lctx.closePath();
+  };
+
+  // bin body + grid cells
+  lctx.fillStyle = 'rgba(181,84,30,0.10)';
+  path(L.outer, true); lctx.fill();
+  lctx.strokeStyle = 'rgba(255,255,255,0.10)'; lctx.lineWidth = 1;
+  const x0 = L.cx - L.cellsX*GRID_SIZE/2, y0 = L.cy - L.cellsY*GRID_SIZE/2;
+  for (let i=1;i<L.cellsX;i++) path([{x:x0+i*GRID_SIZE, y:L.bbOuter.minY},{x:x0+i*GRID_SIZE, y:L.bbOuter.maxY}], false), lctx.stroke();
+  for (let j=1;j<L.cellsY;j++) path([{x:L.bbOuter.minX, y:y0+j*GRID_SIZE},{x:L.bbOuter.maxX, y:y0+j*GRID_SIZE}], false), lctx.stroke();
+  lctx.strokeStyle = '#b5541e'; lctx.lineWidth = 2;
+  path(L.outer, true); lctx.stroke();
+
+  // pockets
+  state.objects.forEach((o, i) => {
+    const bad = L.conflictIds.has(o.id);
+    const sel = o.id === state.selectedId;
+    L.pockets[i].forEach(poly => {
+      lctx.fillStyle = (bad ? '#e5484d' : o.color) + (sel ? '55' : '33');
+      path(poly, true); lctx.fill();
+      lctx.strokeStyle = bad ? '#e5484d' : o.color;
+      lctx.lineWidth = sel ? 3 : 2;
+      lctx.stroke();
+    });
+    // the traced object itself, faint, inside its pocket
+    lctx.setLineDash([3,3]); lctx.lineWidth = 1; lctx.strokeStyle = 'rgba(255,255,255,0.45)';
+    path(objWorldPts(o), true); lctx.stroke(); lctx.setLineDash([]);
+    const c = toPx(o.pos);
+    lctx.fillStyle = '#fff'; lctx.font = 'bold 14px monospace'; lctx.textAlign = 'center';
+    lctx.fillText(o.label, c.x, c.y + 5); lctx.textAlign = 'left';
+  });
+
+  // thumb holes
+  if (L.s.thumbOn) {
+    state.objects.forEach((o, i) => {
+      L.grabsW[i].forEach((g, gi) => {
+        const sel = state.selectedGrab && state.selectedGrab.objId === o.id && state.selectedGrab.idx === gi;
+        const col = sel ? '#ffffff' : '#e8e2d4';
+        const c = toPx({x:g.cx, y:g.cy}), rp = g.r * (frozenView || layoutView).scale;
+        lctx.fillStyle = sel ? 'rgba(255,255,255,0.18)' : 'rgba(232,226,212,0.10)';
+        lctx.beginPath(); lctx.arc(c.x, c.y, rp, 0, Math.PI*2); lctx.fill();
+        lctx.setLineDash([4,3]); lctx.lineWidth = sel ? 2.5 : 1.5; lctx.strokeStyle = col;
+        lctx.stroke(); lctx.setLineDash([]);
+        lctx.fillStyle = col;
+        lctx.beginPath(); lctx.arc(c.x, c.y, 2.5, 0, Math.PI*2); lctx.fill();
+      });
+    });
+  }
+
+  // status line
+  const msgs = [];
+  if (L.conflicts.length) {
+    msgs.push(L.conflicts.map(c => c.a.label + '/' + c.b.label + (c.gap === 0 ? ' overlap' : ' only ' + c.gap.toFixed(1) + 'mm apart')).join(', ') +
+      '. Red pockets are closer than the ' + L.s.divider + 'mm divider; drag them apart or use Auto-arrange (it accounts for thumb holes too). Overlapping pockets merge into one with no divider.');
+  }
+  $('layoutStatus').textContent = msgs.join(' ');
+  $('layoutStatus').className = 'status' + (msgs.length ? ' warn' : '');
+}
+
+function hitGrab(mm, L) {
+  if (!L.s.thumbOn) return null;
+  for (let i=state.objects.length-1;i>=0;i--) {
+    const gs = L.grabsW[i];
+    for (let gi=gs.length-1; gi>=0; gi--) {
+      const g = gs[gi];
+      if (Math.hypot(mm.x-g.cx, mm.y-g.cy) <= g.r) return {i, gi, g};
+    }
+  }
+  return null;
+}
+function hitObject(mm, L) {
+  for (let i=state.objects.length-1;i>=0;i--) {
+    if (L.pockets[i].some(poly => pointInPolygon(mm, poly))) return i;
+  }
+  return -1;
+}
+
+layoutCanvas.addEventListener('pointerdown', e => {
+  const L = lastLayout; if (!L || !layoutView) return;
+  layoutCanvas.focus();
+  const mm = toMMFromEvent(e);
+  const hg = hitGrab(mm, L);
+  if (hg) {
+    const o = state.objects[hg.i];
+    // store the clamped position so what you drag is what you see
+    o.grabs[hg.gi] = grabToLocal(o, hg.g);
+    state.selectedId = o.id;
+    state.selectedGrab = {objId:o.id, idx:hg.gi};
+    drag = {type:'grab-move', o, gi:hg.gi, off:{x:mm.x-hg.g.cx, y:mm.y-hg.g.cy}};
+  } else {
+    const oi = hitObject(mm, L);
+    state.selectedGrab = null;
+    if (oi >= 0) {
+      const o = state.objects[oi];
+      state.selectedId = o.id;
+      drag = {type:'obj', o, off:{x:mm.x-o.pos.x, y:mm.y-o.pos.y}};
+    } else {
+      state.selectedId = null;
+    }
+  }
+  if (drag) { frozenView = Object.assign({}, layoutView); layoutCanvas.setPointerCapture(e.pointerId); }
+  scheduleLayoutDraw();
+});
+
+layoutCanvas.addEventListener('pointermove', e => {
+  if (!drag) {
+    const L = lastLayout; if (!L || !layoutView) return;
+    const mm = toMMFromEvent(e);
+    const hg = hitGrab(mm, L);
+    layoutCanvas.style.cursor = hg ? 'move' : (hitObject(mm, L) >= 0 ? 'grab' : 'default');
+    return;
+  }
+  const mm = toMMFromEvent(e);
+  const o = drag.o;
+  if (drag.type === 'obj') {
+    o.pos = {x: mm.x - drag.off.x, y: mm.y - drag.off.y};
+  } else if (drag.type === 'grab-move') {
+    const cur = grabToWorld(o, o.grabs[drag.gi]);
+    cur.cx = mm.x - drag.off.x; cur.cy = mm.y - drag.off.y;
+    o.grabs[drag.gi] = grabToLocal(o, cur);
+  }
+  markDirty();
+  scheduleLayoutDraw();
+});
+
+function endDrag() {
+  if (!drag) return;
+  drag = null; frozenView = null;
+  scheduleLayoutDraw();
+}
+layoutCanvas.addEventListener('pointerup', endDrag);
+layoutCanvas.addEventListener('pointercancel', endDrag);
+
+layoutCanvas.addEventListener('keydown', e => {
+  if (e.key === 'r' || e.key === 'R') { rotateSelected(); e.preventDefault(); }
+  if (e.key === 'Delete' || e.key === 'Backspace') { deleteSelectedGrab(); e.preventDefault(); }
+});
+
+/* ------------------------- toolbar + list ----------------------------- */
+
+function selectedObj() { return objById(state.selectedId); }
+
+function updateToolbar() {
+  const o = selectedObj();
+  const g = state.selectedGrab && objById(state.selectedGrab.objId);
+  $('btnRotate').disabled = !o;
+  $('btnAddGrab').disabled = !o || !$('thumbEnabled').checked || o.grabs.length >= MAX_THUMBS_PER_OBJECT;
+  $('btnDelGrab').disabled = !g;
+  $('btnAutoArrange').disabled = state.objects.length === 0;
+}
+
+function renderLayoutList(L) {
+  const list = $('layoutObjList');
+  list.innerHTML = '';
+  state.objects.forEach(o => {
+    const row = document.createElement('div');
+    row.className = 'card-row' + (o.id === state.selectedId ? ' active' : '');
+    const sw = document.createElement('div'); sw.className = 'swatch'; sw.style.background = L && L.conflictIds.has(o.id) ? '#e5484d' : o.color;
+    const info = document.createElement('div'); info.className = 'grow';
+    const p = photoById(o.photoId);
+    info.innerHTML = '<div></div><div class="muted"></div>';
+    info.children[0].textContent = 'Object ' + o.label + ' · ' + o.sizeMM.w.toFixed(0) + ' × ' + o.sizeMM.h.toFixed(0) + 'mm · rotated ' + (o.rot*90) + '°';
+    info.children[1].textContent = (p ? p.name : '') + ' · ' + o.grabs.length + ' thumb hole' + (o.grabs.length===1?'':'s');
+    info.style.cursor = 'pointer';
+    info.onclick = () => { state.selectedId = o.id; state.selectedGrab = null; scheduleLayoutDraw(); };
+    const rot = document.createElement('button'); rot.className = 'secondary'; rot.textContent = 'Rotate 90°';
+    rot.onclick = () => { state.selectedId = o.id; rotateSelected(); };
+    const add = document.createElement('button'); add.className = 'secondary'; add.textContent = '+ Thumb hole';
+    add.disabled = o.grabs.length >= MAX_THUMBS_PER_OBJECT || !$('thumbEnabled').checked;
+    add.onclick = () => { state.selectedId = o.id; addGrab(); };
+    const clr = document.createElement('button'); clr.className = 'secondary'; clr.textContent = 'Clear thumb holes';
+    clr.disabled = !o.grabs.length;
+    clr.onclick = () => { o.grabs = []; state.selectedGrab = null; markDirty(); scheduleLayoutDraw(); };
+    const rm = document.createElement('button'); rm.className = 'secondary'; rm.textContent = 'Remove';
+    rm.onclick = () => removeObject(o.id);
+    [sw, info, rot, add, clr, rm].forEach(el => row.appendChild(el));
+    list.appendChild(row);
+  });
+}
+
+function rotateSelected() {
+  const o = selectedObj(); if (!o) return;
+  o.rot = (o.rot + 1) % 4;
+  markDirty(); scheduleLayoutDraw();
+}
+
+// Drops a new thumb hole centered on the pocket's edge (half over the
+// pocket, half beyond it), on a long side first. It picks the first spot
+// that stays clear of other objects' pockets and doesn't sit on top of
+// an existing thumb hole; drag it anywhere afterwards.
+function addGrab() {
+  const o = selectedObj(); if (!o || o.grabs.length >= MAX_THUMBS_PER_OBJECT) return;
+  const s = getSettings();
+  const r = thumbRadius();
+  const cb = boundingBox(objCavity(o));
+  const mx = (cb.minX+cb.maxX)/2, my = (cb.minY+cb.maxY)/2;
+  const cands = [];
+  const along = [0, -0.3, 0.3, -0.15, 0.15];
+  if (cb.w >= cb.h) {
+    along.forEach(f => { cands.push({cx: mx + f*cb.w, cy: cb.maxY}); cands.push({cx: mx + f*cb.w, cy: cb.minY}); });
+    cands.push({cx: cb.maxX, cy: my}, {cx: cb.minX, cy: my});
+  } else {
+    along.forEach(f => { cands.push({cx: cb.maxX, cy: my + f*cb.h}); cands.push({cx: cb.minX, cy: my + f*cb.h}); });
+    cands.push({cx: mx, cy: cb.maxY}, {cx: mx, cy: cb.minY});
+  }
+  const others = state.objects.filter(x => x !== o).map(x => objCavity(x));
+  const mine = o.grabs.map(g => grabToWorld(o, g));
+  const notStacked = c => mine.every(m => Math.hypot(m.cx-c.cx, m.cy-c.cy) >= r*1.2);
+  const clear = c => notStacked(c) && others.every(p => polyGap(circlePts({cx:c.cx, cy:c.cy, r}, 24), p, s.divider + 1) >= s.divider);
+  const pick = cands.find(clear) || cands.find(notStacked) || {cx: mx + mine.length*r*0.6, cy: cb.maxY};
+  o.grabs.push(grabToLocal(o, {cx: pick.cx, cy: pick.cy, r}));
+  state.selectedGrab = {objId:o.id, idx:o.grabs.length-1};
+  markDirty(); scheduleLayoutDraw();
+}
+
+function deleteSelectedGrab() {
+  const sg = state.selectedGrab; if (!sg) return;
+  const o = objById(sg.objId); if (!o) return;
+  o.grabs.splice(sg.idx, 1);
+  state.selectedGrab = null;
+  markDirty(); scheduleLayoutDraw();
+}
+
+$('btnRotate').addEventListener('click', rotateSelected);
+$('btnAddGrab').addEventListener('click', addGrab);
+$('btnDelGrab').addEventListener('click', deleteSelectedGrab);
+$('thumbEnabled').addEventListener('change', () => { state.selectedGrab = null; markDirty(); scheduleLayoutDraw(); });
+['dividerMM','wallThickness','floorThickness','thumbDiameter'].forEach(id =>
+  $(id).addEventListener('input', () => { markDirty(); scheduleLayoutDraw(); }));
+
+/* ------------------------------ AUTO-ARRANGE -----------------------------
+   Packs each object's pocket bounding box (thumb holes included) into
+   rows with the divider thickness between them, trying each object at
+   its current rotation and turned 90°, and every bin width that could
+   work. Keeps the result with the fewest grid cells, preferring ones
+   that fit the plate. Bounding boxes are conservative for odd shapes;
+   drag things closer by hand afterwards if they can nest. */
+
+function autoArrange() {
+  const objs = state.objects; if (!objs.length) return;
+  const s = getSettings();
+  const gap = s.divider;
+  const opts = objs.map(o => [o.rot, (o.rot+1)%4].map(k => {
+    let pts = o.localMM.map(p => rotPt(p, k));
+    if (s.thumbOn) o.grabs.forEach(g => {
+      pts = pts.concat(circlePts(grabToWorld({pos:{x:0,y:0}, rot:k}, g), 16));
+    });
+    return {k, bb: boundingBox(pts)};
+  }));
+
+  const n = objs.length;
+  const combos = [];
+  if (n <= 9) { for (let m=0; m<(1<<n); m++) combos.push(objs.map((_,i) => (m>>i)&1)); }
+  else { combos.push(objs.map(() => 0)); for (let t=0;t<400;t++) combos.push(objs.map(() => Math.random()<0.5?0:1)); }
+
+  const pl = plateSize();
+  const lipExtra = 0;
+  let best = null;
+  for (const combo of combos) {
+    const items = combo.map((c,i) => ({i, k:opts[i][c].k, bb:opts[i][c].bb}));
+    const widest = Math.max(...items.map(it => it.bb.w));
+    const sorted = items.slice().sort((a,b) => b.bb.h - a.bb.h);
+    for (let cx=1; cx<=14; cx++) {
+      const Wav = cx*GRID_SIZE - BIN_CLEARANCE - 2*s.wallT;
+      if (widest > Wav) continue;
+      let x=0, y=0, shelfH=0, usedW=0;
+      const placed = [];
+      for (const it of sorted) {
+        if (x > 0 && x + it.bb.w > Wav) { y += shelfH + gap; x = 0; shelfH = 0; }
+        placed.push({it, x, y});
+        x += it.bb.w + gap; usedW = Math.max(usedW, x - gap);
+        shelfH = Math.max(shelfH, it.bb.h);
+      }
+      const Hused = y + shelfH;
+      const cy = cellsFor(Hused, s.wallT);
+      const cxUsed = cellsFor(usedW, s.wallT);
+      const ow = cxUsed*GRID_SIZE - BIN_CLEARANCE + lipExtra, oh = cy*GRID_SIZE - BIN_CLEARANCE + lipExtra;
+      const fits = (ow<=pl.w && oh<=pl.h) || (ow<=pl.h && oh<=pl.w);
+      const score = [fits ? 0 : 1, cxUsed*cy, Math.max(cxUsed, cy), usedW*Hused];
+      if (!best || lexLess(score, best.score)) best = {score, placed};
+    }
+  }
+  if (!best) return;
+  best.placed.forEach(({it, x, y}) => {
+    const o = objs[it.i];
+    o.rot = it.k;
+    const target = {x: x + it.bb.w/2, y: -(y + it.bb.h/2)};
+    const bbc = {x:(it.bb.minX+it.bb.maxX)/2, y:(it.bb.minY+it.bb.maxY)/2};
+    o.pos = {x: target.x - bbc.x, y: target.y - bbc.y};
+  });
+  markDirty();
+  scheduleLayoutDraw();
+}
+function lexLess(a, b) { for (let i=0;i<a.length;i++) { if (a[i] < b[i] - 1e-9) return true; if (a[i] > b[i] + 1e-9) return false; } return false; }
+$('btnAutoArrange').addEventListener('click', autoArrange);
+
+/* ============================================================
+   BIN GENERATION
+   ============================================================ */
+
+$('btnGenerate').addEventListener('click', () => {
+  try { generateBin(); }
+  catch (err) {
+    console.error(err);
+    $('genStatus').textContent = 'Generation failed: ' + err.message + '. Try simplifying the trace.';
+  }
+});
+
+function extrudeAt(shape, depth, z) {
+  const geo = new THREE.ExtrudeGeometry(shape, {depth, bevelEnabled:false, steps:1, curveSegments:4});
+  geo.rotateX(-Math.PI/2);
+  geo.translate(0, z, 0);
+  return geo;
+}
+// Pockets lined up exactly (auto-arrange aligns their edges) give the
+// triangulator perfectly collinear edges across different holes, which
+// can leave a sliver crack in the caps. A few microns of offset per hole
+// removes the exact collinearity without any visible change.
+function shapeWithHoles(outerPts, holes) {
+  const shape = new THREE.Shape(vec2Array(ensureCCW(outerPts)));
+  holes.forEach((h, i) => {
+    const e = (i+1) * 0.003;
+    const pts = ensureCCW(h).slice().reverse().map(p => ({x: p.x + e*0.37, y: p.y + e}));
+    shape.holes.push(new THREE.Path(vec2Array(pts)));
+  });
+  return shape;
+}
+function polyArea(pts) { return Math.abs(polygonSignedArea(pts)); }
+function positionOnly(g) {
+  const n = g.index ? g.toNonIndexed() : g;
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', n.getAttribute('position'));
+  return out;
+}
+
+// Keeps every cut inside the rounded outer outline with at least a wall's
+// worth of material. Straight sides are already guaranteed by the layout;
+// this catches pocket corners near the bin's rounded corners.
+function clipToSafeRegion(shapes, L) {
+  const inset = Math.min(L.s.wallT, 5);
+  const safe = roundedRectRing(L.cx, L.cy, L.outerW - 2*inset, L.outerH - 2*inset, Math.max(0.3, BIN_RADIUS - inset));
+  const before = shapes.reduce((s, sh) => s + polyArea(sh.outer) - sh.islands.reduce((t, i) => t + polyArea(i), 0), 0);
+  const mp = shapes.map(sh => [sh.outer.map(p => [p.x, p.y]), ...sh.islands.map(r => r.map(p => [p.x, p.y]))]);
+  const res = polyclip.intersection(mp, [[safe.map(p => [p.x, p.y])]]);
+  const out = res.map(poly => ({outer: cleanRing(poly[0]), islands: poly.slice(1).map(cleanRing)}));
+  const after = out.reduce((s, sh) => s + polyArea(sh.outer) - sh.islands.reduce((t, i) => t + polyArea(i), 0), 0);
+  return {shapes: out, trimmed: before - after > 0.5};
+}
+
+function generateBin() {
+  const L = computeLayout();
+  if (!L) { $('genStatus').textContent = 'Trace at least one object first.'; return; }
+  const s = L.s;
+  const bodyTop = s.heightUnits*7;                 // nominal Gridfinity height, bed to top of body
+  const totalHeight = bodyTop + (s.lipOn ? LIP_HEIGHT : 0);
+  const wallHeight = bodyTop - s.floorT - BASE_TOTAL_HEIGHT;
+  if (wallHeight < 1) {
+    $('genStatus').textContent = 'Height is too short once the Gridfinity base (' + BASE_TOTAL_HEIGHT + 'mm) and floor are removed. Increase height units or reduce floor thickness.';
+    return;
+  }
+
+  // Every pocket and grab space, merged into final cut shapes.
+  const cutPolys = [];
+  state.objects.forEach((o,i) => { cutPolys.push(L.cavs[i]); L.grabsW[i].forEach(g => cutPolys.push(circlePts(g))); });
+  const merged = unionPolys(cutPolys);
+  const notes = [];
+  if (merged.failed) throw new Error('the polygon library did not load, so pockets can\'t be merged safely. Check your connection and reload');
+  const clipped = clipToSafeRegion(merged.shapes, L);
+  if (clipped.trimmed) notes.push('A pocket or thumb hole reached into a rounded corner of the bin, so it was trimmed to keep the outer wall intact.');
+  const holes = clipped.shapes.map(sh => sh.outer);
+  const islands = [];
+  clipped.shapes.forEach(sh => sh.islands.forEach(isl => islands.push(isl)));
+
+  if (state.binGroup) scene.remove(state.binGroup);
+  const group = new THREE.Group();
+  const material = new THREE.MeshStandardMaterial({color:0xd98a52, metalness:0.05, roughness:0.75});
+  const geos = [];
+
+  // base feet: fixed per cell, independent of the objects
+  const cellCenter0 = {x: L.cx - L.cellsX*GRID_SIZE/2 + GRID_SIZE/2, y: L.cy - L.cellsY*GRID_SIZE/2 + GRID_SIZE/2};
+  geos.push(buildGridfinityBase(L.cellsX, L.cellsY, cellCenter0));
+  // floor, then the body with pockets cut through it, up to the nominal height
+  geos.push(extrudeAt(new THREE.Shape(vec2Array(L.outer)), s.floorT, BASE_TOTAL_HEIGHT));
+  geos.push(extrudeAt(shapeWithHoles(L.outer, holes), wallHeight + FUSE, BASE_TOTAL_HEIGHT + s.floorT - FUSE));
+  islands.forEach(isl => geos.push(extrudeAt(new THREE.Shape(vec2Array(ensureCCW(isl))), wallHeight + FUSE, BASE_TOTAL_HEIGHT + s.floorT - FUSE)));
+  // stacking lip above the body, inside the footprint
+  if (s.lipOn) geos.push(buildStackingLip(L.cx, L.cy, L.outerW, L.outerH, bodyTop));
+
+  const mergedGeo = THREE.BufferGeometryUtils.mergeBufferGeometries(geos.map(positionOnly), false);
+  mergedGeo.computeVertexNormals();
+  const mesh = new THREE.Mesh(mergedGeo, material);
+  group.add(mesh);
+  mergedGeo.computeBoundingBox();
+  const c = new THREE.Vector3();
+  mergedGeo.boundingBox.getCenter(c);
+  mesh.position.set(-c.x, -mergedGeo.boundingBox.min.y, -c.z);
+  scene.add(group);
+  state.binGroup = group;
+  state.exportMesh = mesh;
+
+  camera.position.set(L.bbOuter.w*1.2, Math.max(L.bbOuter.w, L.bbOuter.h)*1.1, L.bbOuter.h*1.4);
+  controls.target.set(0, totalHeight/2, 0);
+  controls.update();
+
+  const merges = L.conflicts.filter(x => x.gap === 0);
+  const thin = L.conflicts.filter(x => x.gap > 0);
+  if (merges.length) notes.push('Pockets ' + merges.map(x => x.a.label + '+' + x.b.label).join(', ') + ' overlap, so they were merged with no divider between them.');
+  if (thin.length) notes.push('Dividers between ' + thin.map(x => x.a.label + '/' + x.b.label).join(', ') + ' are thinner than ' + s.divider + 'mm.');
+  if (!L.fit.fits) notes.push('⚠ Too big for the selected plate.');
+
+  $('genStatus').textContent = 'Generated: ' + L.cellsX + ' × ' + L.cellsY + ' grid units (' + L.outerW.toFixed(1) + ' × ' + L.outerH.toFixed(1) + 'mm), ' + holes.length + ' pocket' + (holes.length===1?'':'s') + ', ' + totalHeight.toFixed(1) + 'mm tall, standard Gridfinity feet on every cell.' + (notes.length ? ' ' + notes.join(' ') : '');
+  $('btnExport').disabled = false;
+  $('btnExport3mf').disabled = false;
+  state.generated = true;
+  state.dirty = false;
+  state.exported = false;
+  updateWizard();
+  scrollToStep(5);
+}
+
+/* ------------------------------- EXPORT ----------------------------------
+   Both formats export the same Z-up geometry (the preview is Y-up, so a
+   rotated clone is exported and the preview is left alone). */
+
+function exportGeometry() {
+  const geo = state.exportMesh.geometry.clone();
+  geo.translate(state.exportMesh.position.x, state.exportMesh.position.y, state.exportMesh.position.z);
+  geo.rotateX(Math.PI/2);
+  return geo;
+}
+function exportBaseName() {
+  const raw = ($('projectName').value || 'trace3d').trim();
+  return (raw.replace(/[^a-z0-9_\- ]/gi, '').trim() || 'trace3d').replace(/\s+/g, '_');
+}
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  state.exported = true;
+  updateWizard();
+}
+
+$('btnExport').addEventListener('click', () => {
+  if (!state.exportMesh) return;
+  const result = new THREE.STLExporter().parse(new THREE.Mesh(exportGeometry()), {binary:true});
+  downloadBlob(new Blob([result], {type:'application/octet-stream'}), exportBaseName() + '.stl');
+});
+
+/* ---- 3MF ----------------------------------------------------------------
+   A 3MF is a zip holding an XML mesh in millimeters. Unlike STL it stores
+   shared vertices and units explicitly, and slicers (Bambu Studio,
+   OrcaSlicer, PrusaSlicer) open it directly. The zip is written here with
+   no compression, so no extra library is needed. The part is placed at
+   the center of the build plate chosen at the top of the page. */
+
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n=0;n<256;n++) { let c=n; for (let k=0;k<8;k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n]=c>>>0; }
+  return t;
+})();
+function crc32(bytes) {
+  let c = 0xFFFFFFFF;
+  for (let i=0;i<bytes.length;i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+function makeZip(files) { // files: [{name, data:Uint8Array}]
+  const enc = new TextEncoder();
+  const parts = [], central = [];
+  let offset = 0;
+  const now = new Date();
+  const dosTime = (now.getHours()<<11) | (now.getMinutes()<<5) | (now.getSeconds()>>1);
+  const dosDate = ((now.getFullYear()-1980)<<9) | ((now.getMonth()+1)<<5) | now.getDate();
+  files.forEach(f => {
+    const name = enc.encode(f.name), crc = crc32(f.data), size = f.data.length;
+    const lh = new DataView(new ArrayBuffer(30));
+    lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0, true); lh.setUint16(8, 0, true);
+    lh.setUint16(10, dosTime, true); lh.setUint16(12, dosDate, true);
+    lh.setUint32(14, crc, true); lh.setUint32(18, size, true); lh.setUint32(22, size, true);
+    lh.setUint16(26, name.length, true); lh.setUint16(28, 0, true);
+    parts.push(new Uint8Array(lh.buffer), name, f.data);
+    const ch = new DataView(new ArrayBuffer(46));
+    ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true);
+    ch.setUint16(8, 0, true); ch.setUint16(10, 0, true); ch.setUint16(12, dosTime, true); ch.setUint16(14, dosDate, true);
+    ch.setUint32(16, crc, true); ch.setUint32(20, size, true); ch.setUint32(24, size, true);
+    ch.setUint16(28, name.length, true); ch.setUint16(30, 0, true); ch.setUint16(32, 0, true);
+    ch.setUint16(34, 0, true); ch.setUint16(36, 0, true); ch.setUint32(38, 0, true); ch.setUint32(42, offset, true);
+    central.push(new Uint8Array(ch.buffer), name);
+    offset += 30 + name.length + size;
+  });
+  const cdSize = central.reduce((s, p) => s + p.length, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+  end.setUint32(12, cdSize, true); end.setUint32(16, offset, true);
+  return new Blob([...parts, ...central, new Uint8Array(end.buffer)], {type:'model/3mf'});
+}
+
+function build3MF(geo, name) {
+  const pos = geo.getAttribute('position');
+  const plate = plateSize();
+  geo.computeBoundingBox();
+  const bb = geo.boundingBox;
+  // center on the plate, sitting on the bed
+  const dx = plate.w/2 - (bb.min.x+bb.max.x)/2, dy = plate.h/2 - (bb.min.y+bb.max.y)/2, dz = -bb.min.z;
+
+  // shared, de-duplicated vertices; skip triangles that collapse to a line
+  const map = new Map(), verts = [], tris = [];
+  const key = (x, y, z) => Math.round(x*1e4) + ',' + Math.round(y*1e4) + ',' + Math.round(z*1e4);
+  const idx = i => {
+    const x = pos.getX(i)+dx, y = pos.getY(i)+dy, z = pos.getZ(i)+dz;
+    const k = key(x, y, z);
+    let v = map.get(k);
+    if (v === undefined) { v = verts.length / 3; map.set(k, v); verts.push(x, y, z); }
+    return v;
+  };
+  for (let i=0;i<pos.count;i+=3) {
+    const a = idx(i), b = idx(i+1), c = idx(i+2);
+    if (a !== b && b !== c && a !== c) tris.push(a, b, c);
+  }
+
+  const out = [];
+  out.push('<?xml version="1.0" encoding="UTF-8"?>\n<model unit="millimeter" xml:lang="en-US" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">\n');
+  out.push(' <metadata name="Title">' + name + '</metadata>\n <metadata name="Application">Trace3D</metadata>\n');
+  out.push(' <resources>\n  <object id="1" type="model" name="' + name + '">\n   <mesh>\n    <vertices>\n');
+  for (let i=0;i<verts.length;i+=3) out.push('     <vertex x="' + verts[i].toFixed(4) + '" y="' + verts[i+1].toFixed(4) + '" z="' + verts[i+2].toFixed(4) + '"/>\n');
+  out.push('    </vertices>\n    <triangles>\n');
+  for (let i=0;i<tris.length;i+=3) out.push('     <triangle v1="' + tris[i] + '" v2="' + tris[i+1] + '" v3="' + tris[i+2] + '"/>\n');
+  out.push('    </triangles>\n   </mesh>\n  </object>\n </resources>\n <build>\n  <item objectid="1"/>\n </build>\n</model>\n');
+
+  const enc = new TextEncoder();
+  const contentTypes = '<?xml version="1.0" encoding="UTF-8"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">\n <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>\n <Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>\n</Types>\n';
+  const rels = '<?xml version="1.0" encoding="UTF-8"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">\n <Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/>\n</Relationships>\n';
+  return makeZip([
+    {name:'[Content_Types].xml', data: enc.encode(contentTypes)},
+    {name:'_rels/.rels', data: enc.encode(rels)},
+    {name:'3D/3dmodel.model', data: enc.encode(out.join(''))},
+  ]);
+}
+
+$('btnExport3mf').addEventListener('click', () => {
+  if (!state.exportMesh) return;
+  const name = exportBaseName();
+  downloadBlob(build3MF(exportGeometry(), name), name + '.3mf');
+});
+
+/* ------------------------------- INIT ------------------------------------ */
+refreshPhotoUI();
+scheduleLayoutDraw();
+
+</script>
+</body>
+</html>
